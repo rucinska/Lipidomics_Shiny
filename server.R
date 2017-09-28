@@ -13,8 +13,10 @@ shinyServer(function(input, output, session) {
   #DIPLAY THE DATA
   data <- reactive({
     req(input$file1)
-    read.csv(input$file1$datapath,na.strings = c("NA","."), header = input$header,sep = input$sep)
-    
+    inFile <- input$file1
+    df <- read.csv(inFile$datapath,na.strings = c("NA","."), header = input$header,sep = input$sep)
+    df[is.na(df)] <- 0
+    return(df)
   })
   
   filtereddata <- eventReactive({
