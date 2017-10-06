@@ -3,8 +3,14 @@ library(datasets)
 library(DT)
 library(tidyr)
 library(dplyr)
+library(shinyjs)
+
+inline_ui <- function(tag) {
+  div(style = "display: inline-block", tag)
+}
 
 ui <- shinyUI(fluidPage(
+
   titlePanel("Column Plot"),
   tabsetPanel(
     tabPanel("Upload File",
@@ -55,11 +61,97 @@ ui <- shinyUI(fluidPage(
                 
                ),
                mainPanel(
-                 plotOutput('MyPlot')
-               )
-             )
-    ) #end tabPanel
+                 column(
+                   8,
+                 plotOutput('MyPlot'),
+                 div(
+                   id = "save_plot_area",
+                   inline_ui(
+                     textInput("save_plot_name", NULL, "",
+                               placeholder = "Enter plot name to save")
+                   ),
+                   actionButton("save_plot_btn", "Save plot", icon = icon("star")),
+                   shinyjs::hidden(
+                     span(
+                       id = "save_plot_checkmark",
+                       icon("check")
+                     )
+                   )
+                 )
+                 )
+             ) #end mainPanel
+    )
+    ),#end tabPanel
+    tabPanel("Export",
+      conditionalPanel(
+        condition = "!output.saved_plots_exist",
+        h2("You do not have any saved plots to export")
+      ),
+      conditionalPanel(
+        condition = "output.saved_plots_exist",
+        fluidRow(
+          column(
+            4,
+            h2("Export Options"),
+            div(
+              id = "exporting_plots_options",
+              selectInput("export_file_type", "File type",
+                          c("PDF" = "pdf", "JPEG" = "jpeg", "PNG" = "png", "EPS" = "eps")),
+              conditionalPanel(
+                condition = "input.export_file_type == 'pdf'",
+                selectInput("export_pdf_orientation", "Page orientation",
+                            c("Portrait (8.5\" x 11\")" = "portrait",
+                              "Landscape (11\" x 8.5\")" = "landscape",
+                              "Custom dimensions" = "custom")
+                ),
+                conditionalPanel(
+                  condition = "input.export_pdf_orientation == 'custom'",
+                  numericInput("export_pdf_width", "Page width (inches)",
+                               value = 8.5, min = 1, max = 50, step = 0.5),
+                  numericInput("export_pdf_height", "Page height (inches)",
+                               value = 11, min = 1, max = 50, step = 0.5)
+                )
+              ),
+              conditionalPanel(
+                condition = "input.export_file_type != 'pdf'",
+                numericInput("export_file_width", "Image width (pixels)",
+                             value = 480, min = 100, max = 2000),
+                numericInput("export_file_height", "Image height (pixels)",
+                             value = 480, min = 100, max = 2000)
+              ),
+              checkboxInput("export_multiple", "Multiple plots per page"),
+              conditionalPanel(
+                condition = "input.export_multiple",
+                selectInput("export_arrangement", NULL,
+                            c("Arrange plots by row" = "byrow",
+                              "Arrange plots by column" = "bycol")),
+                numericInput("export_nrow", "Rows per page",
+                             value = 1, min = 1, max = 20),
+                numericInput("export_ncol", "Columns per page",
+                             value = 1, min = 1, max = 20)
+                
+              ),
+              uiOutput("export_btn_ui")
+            )
+          ),
+          column(
+            8,
+            h2("Preview"),
+            strong("Remove plot"), br(),
+            inline_ui(uiOutput("plots_remove_ui")),
+            actionButton("remove_plot_btn", "Remove"),
+            uiOutput("plots_order_ui"),
+            div(
+              id = "preview_plots_options",
+              uiOutput("plots_select_page_ui"),
+              plotOutput("plot_preview", height = "auto")
+            )
+          )
+        )
+      )
+    )#end tabPanel
+  
     
-  )
+) #end tabsetPanel
 )
 )
