@@ -27,8 +27,8 @@ ui <- shinyUI(fluidPage(
                               ','),
                  selectInput("select", "Select columns to display",c(), multiple = TRUE),
                  helpText(em("Note: Use delete button to de-select columns")),
-                 actionButton("update", "Update Data Set", class = "btn-primary",style='padding:4px; font-size:120%')
-                 
+                 actionButton("update", "Update Data Set", class = "btn-primary",style='padding:4px; font-size:120%'),
+                 helpText(em("First column will be used as a x axis in the plot!!!"))
                  
                ),
                mainPanel(
@@ -36,21 +36,29 @@ ui <- shinyUI(fluidPage(
                )
              )
     ),
-    tabPanel("First Type",
+    tabPanel("Lipid Abundance",
              pageWithSidebar(
-               headerPanel('Basic scatter plot'),
+               headerPanel('Lipid Abundance'),
+               
                sidebarPanel(
-                 
+                 helpText(em("Note: Select velues that are not experimanetal conditions.")),
                  # "Empty inputs" - they will be updated after the data is uploaded
-                 selectInput('xcol', 'X Variable', ""),
-                 selectInput('ycol', 'Y Variable', "", selected = "")
+                 selectInput('nonexp', "Not experimanetal conditions", "", multiple = TRUE),
+                 #selectInput('xcol', 'X Variable', "", selected = ""),
+                 textInput('xlab', 'X axis label', value = ""),
+                 textInput('ylab', 'Y axis label', value = ""),
+                 textInput('plotTitle', 'Plot title', value = ""),
+                 selectInput('legendposition', label ='Legend Position',
+                  choices=c("left", "right", "bottom", "top"),
+                  multiple=FALSE, selectize=TRUE,selected="bottom")
                  
+                
                ),
                mainPanel(
                  plotOutput('MyPlot')
                )
              )
-    )
+    ) #end tabPanel
     
   )
 )

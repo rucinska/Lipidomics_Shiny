@@ -6,6 +6,10 @@
 #
 
 library(shiny)
+library(dplyr)
+library(tidyr)
+library(DT)
+
 # Define UI for application that plots the Lipidomics data 
 ui <- fluidPage(
   # Application title
@@ -40,13 +44,24 @@ ui <- fluidPage(
                  h5("1. Upload your data file in CSV format. Missing values will be replaced with 0!!. "),
                  h5("2. You can choose if you want a header to be displayed and what kind of seperator you have in csv"),                           
                  h5("3. You can select specific columns for your further analysis. To do that slect columns in dropdown menu. In case of mistake, you can de-select them with delete bottom. Click 'Update Data Set' bottom to work only with selected columns.")
+                 ), # tabpanel 
+        tabPanel("Plot all Data",
                  
-                 
-        )# tabpanel 
+                   headerPanel('Basic Plot'),
+                   sidebarPanel(
+                     
+                     # "Empty inputs" - they will be updated after the data is uploaded
+                     selectInput('xcol', 'X Variable', ""),
+                     selectInput('ycol', 'Y Variable', "", selected = "")
+                     
+                   )
+                  
+                 )
       ) #end tabsetPanel
-    ),
+    ), #end sidebarPanel
     mainPanel(
       tabsetPanel(
+        tabPanel('Plot', plotOutput('MyPlot')),
         tabPanel('Data', dataTableOutput( "contents") )
       ) #close tabsetPanel
     ) #close mainPanel
