@@ -1,0 +1,2967 @@
+---
+title: "Lipidomics (only WT)"
+---
+
+Import the data
+```{r}
+library(readr)
+wt <- read_delim("~/Desktop/WT/WT_data.csv", 
+    ";", escape_double = FALSE, trim_ws = TRUE)
+wt[is.na(wt)] <- 0
+```
+Clean the data:
+1. Remove column 13C 1 and TX 1 3
+```{r}
+index_tx1.3 <-  which(colnames(wt)=="TX 1 3")
+index_temp13.1 <- which(colnames(wt)=="13C 1")
+
+wt <- wt[, -c(index_tx1.3, index_temp13.1)]
+```
+2. Create df with standard condition:
+```{r}
+index_early <-grep("early", colnames(wt), value=TRUE )
+index_lipids <- grep("WT", colnames(wt), value=TRUE )
+
+standcon <- wt[, c(index_lipids, index_early)]
+standcon_gat <- standcon %>% gather(rep, num, -one_of("WT"))
+```
+
+Order the lipdis
+```{r}
+standcon_gat$WT <- factor(standcon_gat$WT, levels = c( "PG [32:1]" ,"PG [34:1]", "PG [34:2]", "PG [36:2]", "PG [36:3]" ,"PE [32:1]", "PE [34:1]", "PE [34:2]", "PE [36:1]" ,"PE [36:2]", "PE [36:3]", "PC [32:1]", "PC [32:2]", "PC [34:1]" ,"PC [34:2]" ,"PC [34:3]", "PC [34:4]", "PC [36:2]" ,"PC [36:3]" ,"PC [36:4]" ,"CL [64:0]" ,"CL [68:2]", "CL [68:4]", "CL [70:4]" ,"CL [72:2]", "DIP" ,"mDIP"))
+
+```
+Add db and len to standcon
+```{r}
+sc <- standcon
+sc<-sc%>%separate(WT, into = c("class", "bal"),sep =  " ", remove = FALSE)
+sc$bal <- sub("\\[", "", sc$bal )
+sc$bal <- sub("\\]", "", sc$bal )
+sc<-sc%>%separate(bal, into = c("len", "db"),sep =  ":")
+
+sc_gat <- sc %>% gather(rep, num, -one_of("WT","class","db", "len"))
+sc_gat[is.na(sc_gat)] <- 0
+sc_gat$class <-  sub("^m", "", sc_gat$class )
+sc_gat$class <-  sub("DIP", "DIPs", sc_gat$class )
+sc_gat$WT <- factor(sc_gat$WT, levels = c( "PG [32:1]" ,"PG [34:1]", "PG [34:2]", "PG [36:2]", "PG [36:3]" ,"PE [32:1]", "PE [34:1]", "PE [34:2]", "PE [36:1]" ,"PE [36:2]", "PE [36:3]", "PC [32:1]", "PC [32:2]", "PC [34:1]" ,"PC [34:2]" ,"PC [34:3]", "PC [34:4]", "PC [36:2]" ,"PC [36:3]" ,"PC [36:4]" ,"CL [64:0]" ,"CL [68:2]", "CL [68:4]", "CL [70:4]" ,"CL [72:2]", "DIP" ,"mDIP"))
+sc_gat$class <- factor(sc_gat$class, levels = c("PG","PE", "PC", "CL", "DIPs") )
+```
+
+
+Plot standard condition with its mean
+
+```{r}
+mean <- sc_gat
+
+mean$rep<-sub("\\d$","",mean$rep)
+
+mean <- mean %>% group_by(rep, class, db, len, WT)%>% summarise_all( funs(mean(.)))
+mean_order <- mean[order(mean$WT),]
+
+positions1 <- data.frame(x1=c(0.7),
+                         x2=c(1.2),
+                         y1=mean_order$num[1],
+                         y2=mean_order$num[1])
+positions2 <- data.frame(x1=c(1.7),
+                         x2=c(2.2),
+                         y1=mean_order$num[2],
+                         y2=mean_order$num[2])
+positions <- data.frame(x1=c(2.7),
+                         x2=c(3.2),
+                         y1=mean_order$num[3],
+                         y2=mean_order$num[3])
+y <- nrow(mean_order)
+e <-0.7
+f <-1.2
+for(i in 2:y) {
+  nam <- paste("positions", i, sep = "")
+  assign(nam,  data.frame(x1=c(e +1),
+                          x2=c(f +1),
+                          y1=mean_order$num[i],
+                          y2=mean_order$num[i] )
+        )
+  e <- e+1
+  f <-f+1
+}
+sc_gat$class <- as.factor(sc_gat$class)
+
+ggplot(sc_gat, aes(x = factor(WT), y= num, col = "red")) + 
+   geom_point(size = 0.4, position = position_dodge(width = 0.3)) +
+  #stat_summary(fun.y=mean, geom="point",size = 0.3,col = "red", show.legend= TRUE,position = position_dodge(width   = 0.3) )+ 
+  theme_bw() +
+  theme( panel.grid.major = element_blank(),
+         panel.grid.minor = element_blank(),
+         axis.text.x=element_text(angle=90,hjust=1),
+         text = element_text(size=5),
+         axis.ticks.length=unit(0.5,"cm"),
+         legend.text=element_text(size=5)) +
+  labs(title = "Standard Condition\n", x = "Presence of lipid [%]", y = "Lipid", color = " ") +
+   scale_color_manual(labels = c("Standard condition"), values = c( "red")) +
+  scale_linetype_manual("",values=c("mean of standard condition"=1))+
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions1, col = "black")+
+   geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions2, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions3, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions4, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions5, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions6, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions7, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions8, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions9, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions10, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions11, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions12, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions13, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions14, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions15, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions16, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions17, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions18, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions19, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions20, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions21, col = "black") + 
+geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions22, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions23, col = "black") + 
+ geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions24, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions25, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions26, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions27, col = "black") 
+ 
+
+
+ggplot(sc_gat, aes(x = factor(WT), y= num, col = "red")) + 
+   geom_point(size = 0.4, position = position_dodge(width = 1.7)) +
+  stat_summary(fun.y= "mean",aes(group=1), geom="point",size = 0.3,col = "black", legend = TRUE )+ 
+  theme_bw() +
+  theme( panel.grid.major = element_blank(),
+         panel.grid.minor = element_blank(),
+         axis.text.x=element_text(angle=90,hjust=1),
+         text = element_text(size=5),
+         axis.ticks.length=unit(0.5,"cm"),
+         legend.text=element_text(size=5)) +
+  labs(title = "Standard Condition\n", x = "Presence of lipid [%]", y = "Lipid", color = " ") +
+   scale_color_manual(labels = c("Standard condition"), values = c( "red")) +
+  scale_linetype_manual("",values=c("mean of standard condition"=1))+ 
+  facet_grid( . ~  class + len, scales="free")
+ #ggsave(file="wt_standcon_facet.eps")
+
+```
+To Do:
+the same plot for class/db/length - stancond
+CLASS - STANDARD CONDITION 
+1) prepare class_SC df
+each class represented as a percentage of total number of classes
+```{r}
+
+standcon_class_sc<-standcon%>%separate(WT, into = c("class", "bal"),sep =  " ")
+standcon_class_sc <- standcon_class_sc %>% select(-bal)
+
+standcon_class_sc_gat <- standcon_class_sc %>% gather(rep, num, -one_of("class"))
+standcon_class_sc_gat$class <-  sub("^m", "", standcon_class_sc_gat$class )
+standcon_class_sc_gat$class <-  sub("DIP", "DIPs", standcon_class_sc_gat$class )
+
+standcon_class_gat_sc_sum <-standcon_class_sc_gat %>% group_by(rep, class) %>% summarise_all(funs(sum(.)))
+
+
+#wt_class_gat_sum$rep<-sub("X","",wt_class_gat_sum$rep)
+standcon_class_gat_sc_sum$rep<-sub("\\d$","",standcon_class_gat_sc_sum$rep)
+standcon_class_gat_sc_sum$rep<-sub("\\.$","",standcon_class_gat_sc_sum$rep)
+
+```
+
+order data :
+```{r}
+standcon_class_gat_sc_sum$class <- factor(standcon_class_gat_sc_sum$class, levels = c( "DIPs", "CL", "PC", "PE", "PG"))
+```
+
+
+```{r}
+mean_class <- standcon_class_gat_sc_sum
+mean_class$rep<-sub("X","",mean_class$rep)
+mean_class$rep<-sub("\\d$","",mean_class$rep)
+mean_class$rep<-sub("\\.$","",mean_class$rep)
+mean_class <- mean_class %>% group_by(rep, class)%>% summarise_all( funs(mean(.)))
+mean_class_order <- mean_class[order(mean_class$class),]
+
+positions1 <- data.frame(x1=c(0.7),
+                         x2=c(1.2),
+                         y1=mean_class_order$num[1],
+                         y2=mean_class_order$num[1])
+
+y <- nrow(mean_class_order)
+e <-0.7
+f <-1.2
+for(i in 2:y) {
+  nam <- paste("positions", i, sep = "")
+  assign(nam,  data.frame(x1=c(e +1),
+                          x2=c(f +1),
+                          y1=mean_class_order$num[i],
+                          y2=mean_class_order$num[i] )
+        )
+  e <- e+1
+  f <-f+1
+}
+
+
+ggplot(standcon_class_gat_sc_sum, aes(x = factor(class), y= num, col = "red")) + 
+   geom_point(size = 0.4, position = position_dodge(width = 0.3)) +
+   coord_flip()+
+  #stat_summary(fun.y=mean, geom="point",size = 0.3,col = "red", show.legend= TRUE,position = position_dodge(width   = 0.3) )+ 
+  theme_bw() +
+  theme( panel.grid.major = element_blank(),
+         panel.grid.minor = element_blank(),
+         axis.text.x=element_text(angle=0,hjust=1),
+         text = element_text(size=5),
+         axis.ticks.length=unit(0.5,"cm"),
+         legend.text=element_text(size=5)) +
+  labs(title = "Standard Condition\n", x = "Lipid class", y = "Presence of lipid [%]", color = " ") +
+   scale_color_manual(labels = c("Standard condition"), values = c( "red")) +
+  scale_linetype_manual("",values=c("mean of standard condition"=1))+
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions1, col = "black")+
+   geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions2, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions3, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions4, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions5, col = "black")  + 
+  coord_fixed(ratio = 0.2) 
+#ggsave(file="class_standcon.eps")
+
+```
+DB - STANDARD CONDITION 
+1) prepare class_SC df
+each class represented as a percentage of total number of classes
+```{r}
+
+standcon_all<-standcon%>%separate(WT, into = c("class", "bal"),sep =  " ")
+cond1 <-  standcon_all$class == "DIP"
+cond2 <- standcon_all$class == "mDIP"
+
+standcon_all <- standcon_all[!cond1,]
+standcon_all <- standcon_all[!cond2,]
+
+standcon_all <- standcon_all %>% select(-class)
+standcon_all$bal <- sub("\\[", "", standcon_all$bal )
+standcon_all$bal <- sub("\\]", "", standcon_all$bal )
+standcon_all<-standcon_all%>%separate(bal, into = c("len", "db"),sep =  ":")
+
+standcon_db <- standcon_all %>% select(-(len))
+
+standcon_db_gat <- standcon_db %>% gather(rep, num, -one_of("db"))
+
+standcon_db_gat_sum <-standcon_db_gat %>% group_by(rep,db) %>% summarise_all(funs(sum(.)))
+
+
+#wt_class_gat_sum$rep<-sub("X","",wt_class_gat_sum$rep)
+standcon_class_gat_sc_sum$rep<-sub("\\d$","",standcon_class_gat_sc_sum$rep)
+standcon_class_gat_sc_sum$rep<-sub("\\.$","",standcon_class_gat_sc_sum$rep)
+
+```
+
+2) plot with mean selected
+```{r}
+mean_db <- standcon_db_gat_sum
+mean_db$rep<-sub("X","",mean_db$rep)
+mean_db$rep<-sub("\\d$","",mean_db$rep)
+mean_db$rep<-sub("\\.$","",mean_db$rep)
+mean_db <- mean_db %>% group_by(rep, db)%>% summarise_all( funs(mean(.)))
+mean_db_order <- mean_db[order(mean_class$class),]
+
+positions1 <- data.frame(x1=c(0.7),
+                         x2=c(1.2),
+                         y1=mean_db_order$num[1],
+                         y2=mean_db_order$num[1])
+
+y <- nrow(mean_class_order)
+e <-0.7
+f <-1.2
+for(i in 2:y) {
+  nam <- paste("positions", i, sep = "")
+  assign(nam,  data.frame(x1=c(e +1),
+                          x2=c(f +1),
+                          y1=mean_db_order$num[i],
+                          y2=mean_db_order$num[i] )
+        )
+  e <- e+1
+  f <-f+1
+}
+
+ggplot(standcon_db_gat_sum, aes(x = factor(db), y= num, col = "red")) + 
+   geom_point(size = 0.4, position = position_jitter(width = 0.3)) +
+   coord_flip()+
+  #stat_summary(fun.y=mean, geom="point",size = 0.3,col = "red", show.legend= TRUE,position = position_dodge(width   = 0.3) )+ 
+  theme_bw() +
+  theme( panel.grid.major = element_blank(),
+         panel.grid.minor = element_blank(),
+         axis.text.x=element_text(angle=0,hjust=1),
+         text = element_text(size=5),
+         axis.ticks.length=unit(0.5,"cm"),
+         legend.text=element_text(size=5)) +
+  labs(title = "Standard Condition\n", x = "Bond", y = "Presence of lipid [%]", color = " ") +
+   scale_color_manual(labels = c("Standard condition"), values = c( "red")) +
+  scale_linetype_manual("",values=c("mean of standard condition"=1))+
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions1, col = "black")+
+   geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions2, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions3, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions4, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions5, col = "black")  + coord_fixed(ratio = 0.2)
+#ggsave(file="db_standcon.eps")
+
+```
+LEN - STANDARD CONDITION 
+1) prepare class_SC df
+each class represented as a percentage of total number of classes
+```{r}
+
+standcon_all<-standcon%>%separate(WT, into = c("class", "bal"),sep =  " ")
+cond1 <-  standcon_all$class == "DIP"
+cond2 <- standcon_all$class == "mDIP"
+
+standcon_all <- standcon_all[!cond1,]
+standcon_all <- standcon_all[!cond2,]
+
+
+standcon_all <- standcon_all %>% select(-class)
+standcon_all$bal <- sub("\\[", "", standcon_all$bal )
+standcon_all$bal <- sub("\\]", "", standcon_all$bal )
+standcon_all<-standcon_all%>%separate(bal, into = c("len", "db"),sep =  ":")
+
+standcon_len <- standcon_all %>% select(-(db))
+
+standcon_len_gat <- standcon_len %>% gather(rep, num, -one_of("len"))
+
+
+standcon_len_gat_sum <-standcon_len_gat %>% group_by(rep,len) %>% summarise_all(funs(sum(.)))
+
+
+#wt_class_gat_sum$rep<-sub("X","",wt_class_gat_sum$rep)
+standcon_len_gat_sum$rep<-sub("\\d$","",standcon_len_gat_sum$rep)
+standcon_len_gat_sum$rep<-sub("\\.$","",standcon_len_gat_sum$rep)
+
+```
+
+2) plot with mean selected
+```{r}
+mean_len <- standcon_len_gat_sum
+mean_len$rep<-sub("X","",mean_len$rep)
+mean_len$rep<-sub("\\d$","",mean_len$rep)
+mean_len$rep<-sub("\\.$","",mean_len$rep)
+mean_len <- mean_len %>% group_by(rep, len)%>% summarise_all( funs(mean(.)))
+mean_len_order <- mean_len[order(mean_len$len),]
+
+positions1 <- data.frame(x1=c(0.7),
+                         x2=c(1.2),
+                         y1=mean_len_order$num[1],
+                         y2=mean_len_order$num[1])
+
+y <- nrow(mean_len_order)
+e <-0.7
+f <-1.2
+for(i in 2:y) {
+  nam <- paste("positions", i, sep = "")
+  assign(nam,  data.frame(x1=c(e +1),
+                          x2=c(f +1),
+                          y1=mean_len_order$num[i],
+                          y2=mean_len_order$num[i] )
+        )
+  e <- e+1
+  f <-f+1
+}
+
+
+ggplot(standcon_len_gat_sum, aes(x = factor(len), y= num, col = "red")) + 
+   geom_point(size = 0.4, position = position_jitter(width = 0.3)) +
+   coord_flip()+
+  #stat_summary(fun.y=mean, geom="point",size = 0.3,col = "red", show.legend= TRUE,position = position_dodge(width   = 0.3) )+ 
+  theme_bw() +
+  theme( panel.grid.major = element_blank(),
+         panel.grid.minor = element_blank(),
+         axis.text.x=element_text(angle=0,hjust=1),
+         text = element_text(size=5),
+         axis.ticks.length=unit(0.5,"cm"),
+         legend.text=element_text(size=5)) +
+  labs(title = "Standard Condition\n", x = "Chain length", y = "Presence of lipid [%]", color = " ") +
+   scale_color_manual(labels = c("Standard condition"), values = c( "red")) +
+  scale_linetype_manual("",values=c("mean of standard condition"=1))+
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions1, col = "black")+
+   geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions2, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions3, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions4, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions5, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions6, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions7, col = "black") + coord_fixed(ratio = 0.2) 
+#ggsave(file="len_standcon.eps")
+
+```
+
+
+Plot with mean for all conditions
+```{r}
+wt_gat <- wt %>% gather(rep, num, -one_of("WT","DB", "length" ))
+wt_gat$WT <- factor(wt_gat$WT, levels = c( "PG [32:1]" ,"PG [34:1]", "PG [34:2]", "PG [36:2]", "PG [36:3]" ,"PE [32:1]", "PE [34:1]", "PE [34:2]", "PE [36:1]" ,"PE [36:2]", "PE [36:3]", "PC [32:1]", "PC [32:2]", "PC [34:1]" ,"PC [34:2]" ,"PC [34:3]", "PC [34:4]", "PC [36:2]" ,"PC [36:3]" ,"PC [36:4]" ,"CL [64:0]" ,"CL [68:2]", "CL [68:4]", "CL [70:4]" ,"CL [72:2]", "DIP" ,"mDIP"))
+
+# positions from the standard condition
+
+
+ggplot(wt_gat, aes(x = factor(WT), y= num, col = "red")) + 
+   geom_point(size = 0.4, position = position_jitter(width = 0.1)) +
+  #stat_summary(fun.y=mean, geom="point",size = 0.3,col = "red", show.legend= TRUE,position = position_dodge(width   = 0.3) )+ 
+  theme_bw() +
+  theme( panel.grid.major = element_blank(),
+         panel.grid.minor = element_blank(),
+         axis.text.x=element_text(angle=90,hjust=1),
+         text = element_text(size=5),
+         axis.ticks.length=unit(0.5,"cm"),
+         legend.text=element_text(size=5)) +
+  labs(title = "All lipids\n", x = "Presence of lipid [%]", y = "Lipid", color = " ") +
+   scale_color_manual(labels = c("All conditions"), values = c( "red")) +
+  scale_linetype_manual("",values=c("mean of standard condition"=1))+
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions1, col = "black")+
+   geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions2, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions3, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions4, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions5, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions6, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions7, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions8, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions9, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions10, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions11, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions12, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions13, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions14, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions15, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions16, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions17, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions18, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions19, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions20, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions21, col = "black") + 
+geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions22, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions23, col = "black") + 
+ geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions24, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions25, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions26, col = "black") + 
+  geom_segment(aes(x=x1,y=y1,xend=x2,yend=y2,linetype = "mean of standard condition"),lwd=0.5,data=positions27, col = "black") 
+
+#ggsave(file="wt_allcon2.eps")
+```
+
+Standard deviation analysis
+```{r}
+sd_lipid <- wt
+
+#SD for total
+sd_lipid <- sd_lipid %>% 
+  select(early1:49) %>%
+  rowwise() %>% 
+  do(data.frame( sd_total = sd(unlist(.)))) %>% 
+  bind_cols(sd_lipid, .)
+
+#SD for TX
+sd_lipid <- sd_lipid %>% 
+  select(starts_with("TX")) %>%
+  rowwise() %>% 
+  do(data.frame(sd_TX = sd(unlist(.)))) %>% 
+  bind_cols(sd_lipid, .)
+
+#SD for gs
+sd_lipid <- sd_lipid %>% 
+  select(starts_with("early"),starts_with("mid"),starts_with("late"),starts_with("stat")) %>%
+  rowwise() %>% 
+  do(data.frame(sd_gs = sd(unlist(.)))) %>% 
+  bind_cols(sd_lipid, .)
+
+#SD for temp
+sd_lipid <- sd_lipid %>% 
+  select(starts_with("13"),starts_with("20"), starts_with("early"),starts_with("4") )%>%
+  rowwise() %>% 
+  do(data.frame(sd_temp = sd(unlist(.))))%>% 
+  bind_cols(sd_lipid, .)
+
+#SD for NaCl
+sd_lipid <- sd_lipid %>% 
+  select(starts_with("Na")) %>%
+  rowwise() %>% 
+  do(data.frame(sd_NaCl = sd(unlist(.)))) %>% 
+  bind_cols(sd_lipid, .)
+
+#SD for MetOh
+sd_lipid <- sd_lipid %>% 
+  select(starts_with("Met")) %>%
+  rowwise() %>% 
+  do(data.frame(sd_Met = sd(unlist(.)))) %>% 
+  bind_cols(sd_lipid, .)
+
+
+
+mean_sd <-sd_lipid %>% 
+  select(starts_with("sd"), WT) %>%
+  group_by(WT) %>% 
+  summarise_all(funs(mean(.) ))
+
+
+mean_sd_gat <- mean_sd %>% gather(sd, mean, -one_of("WT")) %>% tbl_df()
+
+all <- ggplot(mean_sd_gat, aes(x = sd, y= mean)) + geom_bar(stat = "identity", position = "dodge") +ggtitle("sd for all lipids") + theme(axis.text.x=element_text(size=5, angle=90))
+all
+
+```
+
+
+TOTAL
+```{r}
+sd_all <- sd_lipid %>% 
+  select(starts_with("sd"), WT)
+
+sd_all_gat <- sd_all %>% gather(sd, mean, -one_of("WT")) %>% tbl_df()
+
+
+sd_all <- sd_all %>% group_by(WT) %>%
+  mutate(sd_tot = mean(sd_total))
+#order variables base on number
+sd_all <- sd_all[with(sd_all, order(sd_total)), ]
+
+sd_total <- ggplot(sd_all, aes(x =reorder(WT, sd_total), y= sd_total)) + 
+   geom_point(aes(colour = cut(sd_total, c(-Inf, sd_tot[1], Inf))),
+             size = 1) +
+  geom_hline(aes(yintercept = sd_tot,linetype = "Mean")) +
+  scale_linetype_manual(name = " ", values = 1 ) +
+  scale_color_manual(name = " ",
+                     values = c("(-Inf,0.959]" = "black",
+                                  "(0.959, Inf]" = "red"),
+                     labels = c("below mean", "over mean")) +
+  
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 0, hjust = 1)
+        )+
+  coord_flip(ylim = c(0,7)) +
+  labs(title = "Total Standard Deviation for all lipids", x = "Lipids", y = "Standard deviation", color = " ")
+sd_total
+
+#ggsave(file="sd_total.eps")
+```
+
+TX
+```{r}
+sd_all <- sd_all %>% group_by(WT) %>%
+  mutate(mean_TX = mean(sd_TX))
+
+
+
+sd_tx <- ggplot(sd_all, aes(x = reorder(WT, sd_TX), y= sd_TX)) + 
+   geom_point(aes(colour = cut(sd_TX, c(-Inf, mean_TX[1], Inf))),
+             size = 1) +
+  geom_hline(aes(yintercept = mean_TX,linetype = "Mean")) +
+  scale_linetype_manual(name = " ", values = 1 ) +
+  scale_color_manual(name = " ",
+                     values = c("(-Inf,0.155]" = "black",
+                                  "(0.155, Inf]" = "red"),
+                     labels = c("below mean", "over mean")) +
+  
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 0, hjust = 1))+
+  coord_flip(ylim = c(0,7)) +
+  labs(title = "Total Standard Deviation for TX", x = "Lipids", y = "Standard deviation", color = " ") 
+sd_tx
+#ggsave(file="sd_tx.eps")
+```
+TEMP
+```{r}
+sd_all <- sd_all %>% group_by(WT) %>%
+  mutate(mean_temp = mean(sd_temp))
+
+
+
+sd_temp <- ggplot(sd_all, aes(x =reorder(WT, sd_temp), y= sd_temp)) + 
+   geom_point(aes(colour = cut(sd_temp, c(-Inf, mean_temp[1], Inf))),
+             size = 1) +
+  geom_hline(aes(yintercept = mean_temp,linetype = "Mean")) +
+  scale_linetype_manual(name = " ", values = 1 ) +
+  scale_color_manual(name = " ",
+                     values = c("(-Inf,1.19]" = "black",
+                                  "(1.19, Inf]" = "red"),
+                     labels = c("below mean", "over mean")) +
+  
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 0, hjust = 1))+
+  coord_flip(ylim = c(0,7)) +
+  labs(title = "Total Standard Deviation for temperature", x = "Lipids", y = "Standard deviation", color = " ")
+sd_temp
+#ggsave(file="sd_temp.eps")
+```
+Growth stage 
+```{r}
+sd_all <- sd_all %>% group_by(WT) %>%
+  mutate(mean_gs = mean(sd_gs))
+
+
+
+sd_gs <- ggplot(sd_all, aes(x =reorder(WT, sd_gs), y= sd_gs)) + 
+   geom_point(aes(colour = cut(sd_gs, c(-Inf, mean_gs[1], Inf))),
+             size = 1) +
+  geom_hline(aes(yintercept = mean_gs,linetype = "Mean")) +
+  scale_linetype_manual(name = " ", values = 1 ) +
+  scale_color_manual(name = " ",
+                     values = c("(-Inf,0.533]" = "black",
+                                  "(0.533, Inf]" = "red"),
+                     labels = c("below mean", "over mean")) +
+  
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 0, hjust = 1))+
+  coord_flip(ylim = c(0,7)) +
+  labs(title = "Total Standard Deviation for growth stage", x = "Lipids", y = "Standard deviation", color = " ")
+sd_gs
+#ggsave(file="sd_gs.eps")
+```
+
+NaCl
+```{r}
+sd_all <- sd_all %>% group_by(WT) %>%
+  mutate(mean_NaCl = mean(sd_NaCl))
+
+
+
+sd_nacl <- ggplot(sd_all, aes(x =reorder(WT, sd_NaCl), y= sd_NaCl)) + 
+   geom_point(aes(colour = cut(sd_NaCl, c(-Inf, mean_NaCl[1], Inf))),
+             size = 1) +
+  geom_hline(aes(yintercept = mean_NaCl,linetype = "Mean")) +
+  scale_linetype_manual(name = " ", values = 1 ) +
+  scale_color_manual(name = " ",
+                     values = c("(-Inf,0.346]" = "black",
+                                  "(0.346, Inf]" = "red"),
+                     labels = c("below mean", "over mean")) +
+  
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 0, hjust = 1))+
+  coord_flip(ylim = c(0,7)) +
+  labs(title = "Total Standard Deviation for NaCl", x = "Lipids", y = "Standard deviation", color = " ")
+sd_nacl
+#ggsave(file="sd_nacl.eps")
+```
+
+Met
+```{r}
+sd_all <- sd_all %>% group_by(WT) %>%
+  mutate(mean_Met = mean(sd_Met))
+
+
+
+sd_met <- ggplot(sd_all, aes(x =reorder(WT, sd_Met), y= sd_Met)) + 
+   geom_point(aes(colour = cut(sd_Met, c(-Inf, mean_Met[1], Inf))),
+             size = 1) +
+  geom_hline(aes(yintercept = mean_Met,linetype = "Mean")) +
+  scale_linetype_manual(name = " ", values = 1 ) +
+  scale_color_manual(name = " ",
+                     values = c("(-Inf,0.205]" = "black",
+                                  "(0.205, Inf]" = "red"),
+                     labels = c("below mean", "over mean")) +
+  
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  coord_flip(ylim = c(0,7)) +
+  labs(title = "Total Standard Deviation for MetOH", x = "Lipids", y = "Standard deviation", color = " ")
+sd_met
+#ggsave(file="sd_met.eps")
+```
+Save them in one pdf
+
+```{r}
+library(ggtree)
+
+sd_met+theme(legend.position = "none")   
+pdf(file="sd.pdf")
+multiplot(sd_gs+theme(legend.position = "none"), sd_met+theme(legend.position = "none"), sd_nacl+theme(legend.position = "none"), sd_tx+theme(legend.position = "none"), sd_temp+theme(legend.position = "none"),sd_total+theme(legend.position = "none"), ncol = 3)
+dev.off()
+
+```
+
+BOX PLOT FOR CLASSES
+1) prepare class df
+each class represented as a percentage of total number of classes
+```{r}
+wt_class<-wt %>% select( -c(DB,length))
+
+
+wt_class<-wt_class%>%separate(WT, into = c("class", "bal"),sep =  " ")
+wt_class <- wt_class %>% select(-bal)
+
+wt_class_gat <- wt_class %>% gather(rep, num, -one_of("class"))
+wt_class_gat$class <-  sub("^m", "", wt_class_gat$class )
+wt_class_gat$class <-  sub("DIP", "DIPs", wt_class_gat$class )
+#wt_class_gat_sum <-wt_class_gat %>% group_by(rep, class) %>% summarise_all(funs(sum(.)))
+
+wt_class_gat_sum <- wt_class_gat %>%
+    group_by(rep) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%
+    group_by(rep,class)%>%
+    dplyr::summarise(Per=sum(sumper)*100)
+
+
+#wt_class_gat_sum$rep<-sub("X","",wt_class_gat_sum$rep)
+wt_class_gat_sum$rep<-sub("\\d$","",wt_class_gat_sum$rep)
+wt_class_gat_sum$rep<-sub("\\.$","",wt_class_gat_sum$rep)
+
+
+
+gs <- c("early", "mid", "late", "stat")
+wt_class_gat_sum$groups <- ifelse(grepl("TX",wt_class_gat_sum$rep), "TX", 
+                                  ifelse(grepl("4",wt_class_gat_sum$rep),"Temperature", 
+                                  ifelse(grepl("13",wt_class_gat_sum$rep),"Temperature", 
+                                            ifelse(grepl("30",wt_class_gat_sum$rep),"Temperature",
+                                                   ifelse(grepl("20",wt_class_gat_sum$rep),"Temperature",
+                                                          ifelse(grepl(paste(gs, collapse = "|"), wt_class_gat_sum$rep),"Growth stage",
+                                                                 ifelse(grepl("Na",wt_class_gat_sum$rep), "NaCl",
+                                                                        ifelse(grepl("Met",wt_class_gat_sum$rep), "MetOH",
+                                                                               
+                                                                               "Other"))))))))
+```
+
+Box plot of class data
+```{r}
+wt_class_gat_sum$class <- factor(wt_class_gat_sum$class, levels = c("PG","PE","PC","CL","DIPs"))
+
+fill <- "#4271AE"
+lines <- "#1F3552"
+ggplot(wt_class_gat_sum, aes(x = class, y= Per, col = groups)) +
+  stat_boxplot(geom ='errorbar') +
+  geom_boxplot(colour = "grey", fill= "white")+
+  geom_jitter(size = 0.4, position = position_dodge(width = 0.5))+
+  theme(axis.text.x=element_text(angle=90,hjust=1), text = element_text(size=5)) +   theme_bw()  + coord_fixed(ratio = 1/10) #+ylim(0,100)
+
+#ggsave(file="class_mini_boxplots.eps")
+#only range
+ggplot(wt_class_gat_sum, aes(x = class, y= Per, col = groups)) +
+   geom_point(size = 0.4,position = position_dodge(width = 0.5)) +
+   geom_boxplot(fill= "white", alpha = 0.1,lwd=0.2)+
+   stat_boxplot(geom ='errorbar', alpha = 0.4,lwd=0.2) +
+  #geom_jitter(size = 0.4, position = position_dodge(width = 0.5))+
+  theme(axis.text.x=element_text(angle=90,hjust=1), text = element_text(size=5)) +   theme_bw()  + coord_fixed(ratio = 1/10) +ylim(0,100)
+
+
+wt_class_gat_sum$groups <- factor(wt_class_gat_sum$groups, levels = c( "Temperature", "Growth stage", "NaCl", "MetOH", "TX"))
+ggplot( aes(x=factor(class),y=Per), data=wt_class_gat_sum ) +
+  geom_boxplot( aes(col=factor(groups)),fill= "white", alpha = 0.1,lwd=0.2) +
+  geom_point( aes(color=factor(groups)), 
+              position=position_dodge(width=0.75), size = 0.4 ) +
+  theme(axis.text.x=element_text(angle=90,hjust=1), text = element_text(size=5)) +        theme_bw()  +
+  coord_fixed(ratio = 1/10) +ylim(0,100)
+#ggsave(file="class_mini_boxplots_3.eps") 
+
+
+```
+3) desity plot of class data - violin
+
+The violin plot is similar to box plots, except that they also show the probability density of the data at different values (in the simplest case this could be a histogram)
+
+A violin plot is more informative than a plain box plot. In fact while a box plot only shows summary statistics such as mean/median and interquartile ranges, the violin plot shows the full distribution of the data.
+
+ Wider sections of the violin plot represent a higher probability that members of the population will take on the given value; the skinnier sections represent a lower probability.
+```{r}
+ggplot(wt_class_gat_sum, aes(x =class, y = Per, fill = class)) +
+  geom_violin() +
+  theme_bw() + coord_fixed(ratio = 0.2)
+
+
+ggsave(file="class_violin_wt.eps")
+```
+```{r}
+wt_class_gat_sum$groups <- factor(wt_class_gat_sum$groups, levels = c( "Temperature", "Growth stage", "NaCl", "MetOH", "TX"))
+
+ggplot(wt_class_gat_sum, aes(x =class, y = Per, fill = groups)) +
+  geom_violin() +
+  coord_flip() +  
+  facet_grid(class ~ ., scales = "free") +
+  theme_bw()+
+  theme(strip.text.y = element_blank()) 
+ggsave(file="class_violin_wt_groups.eps")
+```
+
+Liczebnosc w danym przedziale 
+```{r}
+ggplot(wt_class_gat_sum, aes(x = Per, fill = class)) +
+  geom_density(col = NA, alpha = 0.35)
+```
+
+PCA of WT:
+
+```{r}
+#DELETE 4C
+index_4C1 <-  which(colnames(wt)=="4C 1")
+index_4C2 <- which(colnames(wt)=="4C 2")
+index_4C3 <- which(colnames(wt)=="4C 3")
+index_13C2 <- which(colnames(wt)=="13C 2")
+index_13C3 <- which(colnames(wt)=="13C 3")
+index_20C1 <-  which(colnames(wt)=="20C 1")
+index_20C2 <- which(colnames(wt)=="20C 2")
+index_20C3 <- which(colnames(wt)=="20C 3")
+index_30C1 <-  which(colnames(wt)=="30C 1")
+index_30C2 <- which(colnames(wt)=="30C 2")
+index_30C3 <- which(colnames(wt)=="30C 3")
+#no 4 C
+wt_no4c <- wt[, -c(index_4C1,index_4C2,index_4C3)]
+#NO TEMP
+wt_temp <- wt[, -c(index_4C1,index_4C2,index_4C3,index_20C1,index_20C2,index_20C3,index_30C1,index_30C2,index_30C3,index_13C2, index_13C3)]
+# all data 
+wt
+
+WT_gather <- gather(wt, replicate, membr_perc, -one_of("WT", "DB", "length"))
+WT_gather <- select(WT_gather,-c(2,3))
+
+
+wt_spread <- spread(WT_gather, WT, membr_perc)
+#rownames(lip_db_gather) <- lip_db_gather$con_type
+#lip_temp_gather<- lip_temp_gather%>% separate(con_type, into = c("type", "con"),sep =  "_")
+wt_spread$replicate <- make.names(wt_spread$replicate, unique=TRUE)
+rownames(wt_spread) <- wt_spread$replicate
+wt_spread <- select(wt_spread,-replicate)
+
+
+
+wt.rep <- rownames(wt_spread)
+wt.rep<-sub("^X","",wt.rep)
+wt.rep<-sub("\\d{1}$","",wt.rep)
+wt.rep<-sub("\\.$","",wt.rep) #remomve dot at the end
+
+
+prin_comp_wttwmp <- prcomp(wt_spread, scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+ggbiplot(prin_comp_wttwmp, 
+              obs.scale = 1, 
+              var.scale = 1,
+              groups = wt.rep ,
+              var.axes = FALSE,
+              ellipse = FALSE) +
+              #label = wt.rep)
+         geom_point(aes( colour=wt.rep), size = 1) +
+          geom_text_repel(aes(label = wt.rep, 
+                      col =wt.rep),
+                      size = 2,
+                      segment.color = 'grey50')+
+          theme_bw()+  
+        theme( legend.position = "none") 
+
+ #ggsave(file="pca_all-elipse.eps")
+
+```
+
+
+```{r}
+zoom <- g + coord_cartesian(xlim= c(-1,3), ylim = c(-3, 1))
+zoom  +
+  geom_text_repel(aes(label = wt.rep, col =wt.rep),
+  size = 2,
+    segment.color = 'grey50')
+
+
+
+#ggsave(file="pca_all-zoom-ellipse.eps")
+```
+BOX PLOT FOR DB
+1) prepare db df
+each class represented as a percentage of total number of classes
+```{r}
+wt_DB<-wt 
+cond1 <-  wt_DB$WT == "DIP"
+wt_DB <- wt_DB[!cond1,]
+cond2 <- wt_DB$WT == "mDIP"
+wt_DB <- wt_DB[!cond2,]
+cond3 <- wt_DB$DB == "0"
+wt_DB <- wt_DB[!cond3,]
+
+wt_DB<-wt_DB %>% select( -c(WT,length))
+
+wt_DB_gat <- wt_DB %>% gather(rep, num, -one_of("DB"))
+
+#wt_DB_gat_sum <-wt_DB_gat %>% group_by(rep, DB) %>% summarise_all(funs(sum(.)))
+wt_DB_gat_sum <-
+    wt_DB_gat%>%
+    group_by(rep) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%group_by(rep,DB)%>%
+    dplyr::summarise(Per =sum(sumper)*100)
+
+
+#wt_class_gat_sum$rep<-sub("X","",wt_class_gat_sum$rep)
+wt_DB_gat_sum$rep<-sub("\\d$","",wt_DB_gat_sum$rep)
+wt_DB_gat_sum$rep<-sub("\\.$","",wt_DB_gat_sum$rep)
+
+
+
+gs <- c("early", "mid", "late", "stat")
+wt_DB_gat_sum$groups <- ifelse(grepl("TX",wt_DB_gat_sum$rep), "TX", 
+                                  ifelse(grepl("4",wt_DB_gat_sum$rep),"Temperature", 
+                                  ifelse(grepl("13",wt_DB_gat_sum$rep),"Temperature", 
+                                            ifelse(grepl("30",wt_DB_gat_sum$rep),"Temperature",
+                                                   ifelse(grepl("20",wt_DB_gat_sum$rep),"Temperature",
+                                                          ifelse(grepl(paste(gs, collapse = "|"), wt_DB_gat_sum$rep),"Growth stage",
+                                                                 ifelse(grepl("Na",wt_DB_gat_sum$rep), "NaCl",
+                                                                        ifelse(grepl("Met",wt_DB_gat_sum$rep), "MetOH",
+                                                                               
+                                                                               "Other"))))))))
+```
+
+Box plot of class data
+```{r}
+wt_DB_gat_sum$DB <- factor(wt_DB_gat_sum$DB, levels = c("1","2","3","4"))
+wt_DB_gat_sum$groups <- factor(wt_DB_gat_sum$groups, levels = c( "Temperature", "Growth stage", "NaCl", "MetOH", "TX"))
+fill <- "#4271AE"
+lines <- "#1F3552"
+ggplot(wt_DB_gat_sum, aes(x =DB, y= Per, col = groups)) +
+   stat_boxplot(geom ='errorbar') +
+  geom_boxplot(colour = "grey", fill= "white", varwidth = TRUE)+
+  geom_jitter(size = 0.4, position = position_dodge(width = 0.5))+
+  theme(axis.text.x=element_text(angle=90,hjust=1), text = element_text(size=5)) +   theme_bw()  + coord_fixed(ratio = 0.09) +ylim(0,100)
+
+
+ggplot( aes(x=factor(DB),y=Per), data=wt_DB_gat_sum ) +
+  geom_boxplot( aes(col=factor(groups)),fill= "white", alpha = 0.1,lwd=0.2) +
+  geom_point( aes(color=factor(groups)), 
+              position=position_dodge(width=0.75), size = 0.4 ) +
+  theme(axis.text.x=element_text(angle=90,hjust=1), text = element_text(size=5)) +        theme_bw()  +
+  coord_fixed(ratio = 1/10) +ylim(0,100)
+#ggsave(file="DB_boxplot_mini.eps")
+```
+```{r}
+ggplot(wt_DB_gat_sum, aes(x =DB, y = Per, fill = DB)) +
+  geom_violin() +
+  theme_bw()  + coord_fixed(ratio = 0.1)
+
+
+
+ggsave(file="db_violin_wt_slim.eps")
+```
+BOX PLOT FOR LENGTH
+1) prepare length df
+each class represented as a percentage of total number of classes
+```{r}
+wt_len<-wt 
+
+cond1 <-  wt_len$WT == "DIP"
+wt_len <- wt_len[!cond1,]
+cond2 <- wt_len$WT == "mDIP"
+wt_len <- wt_len[!cond2,]
+cond3 <- wt_len$length == "64"
+wt_len <- wt_len[!cond3,]
+cond4 <- wt_len$length == "68"
+wt_len <- wt_len[!cond4,]
+cond5 <- wt_len$length == "70"
+wt_len <- wt_len[!cond5,]
+cond6 <- wt_len$length == "72"
+wt_len <- wt_len[!cond6,]
+
+
+wt_len<-wt_len %>% select( -c(WT,DB))
+
+wt_len_gat <- wt_len %>% gather(rep, num, -one_of("length"))
+
+#wt_len_gat_sum <-wt_len_gat %>% group_by(rep, length) %>% summarise_all(funs(sum(.)))
+
+wt_len_gat_sum <-
+    wt_len_gat%>%
+    group_by(rep) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%group_by(rep,length)%>%
+    dplyr::summarise(Per =sum(sumper)*100)
+
+#wt_class_gat_sum$rep<-sub("X","",wt_class_gat_sum$rep)
+wt_len_gat_sum$rep<-sub("\\d$","",wt_len_gat_sum$rep)
+wt_len_gat_sum$rep<-sub("\\.$","",wt_len_gat_sum$rep)
+
+
+
+gs <- c("early", "mid", "late", "stat")
+wt_len_gat_sum$groups <- ifelse(grepl("TX",wt_len_gat_sum$rep), "TX", 
+                                  ifelse(grepl("4",wt_len_gat_sum$rep),"Temperature", 
+                                  ifelse(grepl("13",wt_len_gat_sum$rep),"Temperature", 
+                                            ifelse(grepl("30",wt_len_gat_sum$rep),"Temperature",
+                                                   ifelse(grepl("20",wt_len_gat_sum$rep),"Temperature",
+                                                          ifelse(grepl(paste(gs, collapse = "|"), wt_len_gat_sum$rep),"Growth stage",
+                                                                 ifelse(grepl("Na",wt_len_gat_sum$rep), "NaCl",
+                                                                        ifelse(grepl("Met",wt_len_gat_sum$rep), "MetOH",
+                                                                               
+                                                                               "Other"))))))))
+```
+
+Box plot of class data
+```{r}
+wt_len_gat_sum$length <- factor(wt_len_gat_sum$length, levels = c("32","34","36","64","68", "70", "72"))
+wt_len_gat_sum$groups <- factor(wt_len_gat_sum$groups, levels = c( "Temperature", "Growth stage", "NaCl", "MetOH", "TX"))
+fill <- "#4271AE"
+lines <- "#1F3552"
+ggplot(wt_len_gat_sum, aes(x =length, y= Per, col = groups)) +
+  stat_boxplot(geom ='errorbar') +
+  geom_boxplot(colour = "grey", fill= "white", varwidth = TRUE)+
+  geom_jitter(size = 0.4, position = position_dodge(width = 0.5))+
+  theme(axis.text.x=element_text(angle=90,hjust=1), text = element_text(size=5)) +   theme_bw()  + coord_fixed(ratio = 0.1) +ylim(0,100)
+
+#mini boxplot for each group
+ggplot( aes(x=factor(length),y=Per), data=wt_len_gat_sum ) +
+  geom_boxplot( aes(col=factor(groups)),fill= "white", alpha = 0.1,lwd=0.2) +
+  geom_point( aes(color=factor(groups)), 
+              position=position_dodge(width=0.75), size = 0.4 ) +
+  theme(axis.text.x=element_text(angle=90,hjust=1), text = element_text(size=5)) +        theme_bw()  +
+  coord_fixed(ratio = 1/10) +ylim(0,100)
+
+#ggsave(file="LEN_boxplot_mini.eps")
+```
+```{r}
+ggplot(wt_len_gat_sum, aes(x =length, y = Per, fill = length)) +
+  geom_violin() +
+  theme_bw()  + coord_fixed(ratio = 0.2)
+
+
+
+ggsave(file="len_violin_wt_slim.eps")
+```
+```{r}
+db <- wt
+db<-wt%>%separate(WT, into = c("class", "bal"),sep =  " ")
+db <- db %>% select(-bal)
+
+db_gat <- db %>% gather(rep, num, -one_of("class", "DB","length"))
+db_gat$class <-  sub("^m", "", db_gat$class )
+db_gat$class <-  sub("DIP", "DIPs", db_gat$class )
+
+
+#db_gat_sum <-db_gat %>% group_by(rep, class, DB, length) %>% summarise_all(funs(sum(.)))
+db_gat_sum <- db_gat %>%
+    group_by(rep) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%
+    group_by(rep,class,DB)%>%
+    dplyr::summarise(Per=sum(sumper)*100)
+
+#wt_class_gat_sum$rep<-sub("X","",wt_class_gat_sum$rep)
+db_gat_sum$rep<-sub("\\d$","",db_gat_sum$rep)
+db_gat_sum$rep<-sub("\\.$","",db_gat_sum$rep)
+
+
+
+gs <- c("early", "mid", "late", "stat")
+db_gat_sum$groups <- ifelse(grepl("TX",db_gat_sum$rep), "TX", 
+                                  ifelse(grepl("4",db_gat_sum$rep),"Temperature", 
+                                  ifelse(grepl("13",db_gat_sum$rep),"Temperature", 
+                                            ifelse(grepl("30",db_gat_sum$rep),"Temperature",
+                                                   ifelse(grepl("20",db_gat_sum$rep),"Temperature",
+                                                          ifelse(grepl(paste(gs, collapse = "|"), db_gat_sum$rep),"Growth stage",
+                                                                 ifelse(grepl("Na",db_gat_sum$rep), "NaCl",
+                                                                        ifelse(grepl("Met",db_gat_sum$rep), "MetOH",
+                                                                               
+                                                                               "Other"))))))))
+```
+CL 
+
+```{r}
+wt_gat_class <- wt_gat
+wt_gat_class<-wt_gat_class%>%separate(WT, into = c("class", "bal"),sep =  " ")
+wt_gat_class <- wt_gat_class %>% select(-bal)
+
+wt_gat_class$rep<-sub("\\d$","",wt_gat_class$rep)
+wt_gat_class$rep<-sub("\\.$","",wt_gat_class$rep)
+
+
+
+gs <- c("early", "mid", "late", "stat")
+wt_gat_class$groups <- ifelse(grepl("TX",wt_gat_class$rep), "TX", 
+                                  ifelse(grepl("4",wt_gat_class$rep),"Temperature", 
+                                  ifelse(grepl("13",wt_gat_class$rep),"Temperature", 
+                                            ifelse(grepl("30",wt_gat_class$rep),"Temperature",
+                                                   ifelse(grepl("20",wt_gat_class$rep),"Temperature",
+                                                          ifelse(grepl(paste(gs, collapse = "|"), wt_gat_class$rep),"Growth stage",
+                                                                 ifelse(grepl("Na",wt_gat_class$rep), "NaCl",
+                                                                        ifelse(grepl("Met",wt_gat_class$rep), "MetOH",
+                                                                               
+                                                                               "Other"))))))))
+
+CL <- filter(wt_gat_class, class == "CL")
+```
+CL - DB
+```{r}
+CL_db <- select(CL, -length)
+
+CL_db_sum <- CL_db %>%
+             group_by(rep) %>%                     # grouped by rep
+             mutate(sum_rep=sum(num)) %>%          # sum of each rep
+             group_by(groups,rep,class,DB) %>%            # grouped by DB
+             summarise(desired=(sum(num)/unique(sum_rep)))   # sum(DB)/sum(rep)
+CL_db_sum <- CL_db %>%
+    group_by(rep) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%
+    group_by(groups,rep,class,DB)%>%
+    dplyr::summarise(Per=sum(sumper)*100)
+
+
+CL_db_sum$DB <- factor(CL_db_sum$DB, levels = c("0","1","2","3","4"))
+CL_db_sum$groups <- factor(CL_db_sum$groups, levels = c( "Temperature", "Growth stage", "NaCl", "MetOH", "TX"))
+fill <- "#4271AE"
+lines <- "#1F3552"
+ggplot(CL_db_sum, aes(x =DB, y= Per, col = groups)) +
+  geom_boxplot(colour = "grey", fill= "white", varwidth = TRUE)+
+  geom_jitter(size = 0.4, position = position_dodge(width = 0.5))+
+  theme(axis.text.x=element_text(angle=90,hjust=1), text = element_text(size=5)) +    
+  theme_bw() + coord_fixed(ratio = 0.05) +ylim(0,100)
+
+
+ggplot(CL_db_sum, aes(x =DB, y = Per, fill = DB)) +
+  geom_violin() +
+  theme_bw() +
+  coord_fixed(ratio = 0.05)
+
+
+
+#ggsave(file="cl_db_violin_wt.eps")
+#ggsave(file="cl-DB_boxplot_wt.eps")
+```
+
+
+CL - LENGTH
+```{r}
+CL_len <- select(CL, -DB)
+
+CL_len_sum <- CL_len %>%
+    group_by(rep) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%
+    group_by(groups,rep,class,length)%>%
+    dplyr::summarise(Per=sum(sumper)*100)
+
+CL_len_sum$length <- factor(CL_len_sum$length, levels = c("32","34","36","64","68", "70", "72"))
+CL_len_sum$groups <- factor(CL_len_sum$groups, levels = c( "Temperature", "Growth stage", "NaCl", "MetOH", "TX"))
+
+fill <- "#4271AE"
+lines <- "#1F3552"
+ggplot(CL_len_sum, aes(x =length, y= Per, col = groups)) +
+  geom_boxplot(colour = "grey", fill= "white", varwidth = TRUE)+
+  geom_jitter(size = 0.4, position = position_dodge(width = 0.5))+
+  theme(axis.text.x=element_text(angle=90,hjust=1), text = element_text(size=5)) +   theme_bw() + coord_fixed(ratio = 0.05) +ylim(0,100)
+
+
+ggplot(CL_len_sum, aes(x =length, y = Per, fill = length)) +
+  geom_violin() + 
+  coord_fixed(ratio = 0.1) +
+  theme_bw()
+
+
+
+#ggsave(file="cl_len_violin_wt.eps")
+#ggsave(file="cl-len_boxplot_wt.eps")
+```
+PC 
+
+```{r}
+PC <- filter(db_gat_sum, class == "PC")
+```
+PC - DB
+```{r}
+PC_db <- select(PC, -length)
+PC_db_sum <- PC_db %>%
+    group_by(rep) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%
+    group_by(groups,rep,class,DB)%>%
+    dplyr::summarise(Per=sum(sumper)*100)
+
+
+PC_db_sum$DB <- factor(PC_db_sum$DB, levels = c("0","1","2","3","4"))
+PC_db_sum$groups <- factor(PC_db_sum$groups, levels = c( "Temperature", "Growth stage", "NaCl", "MetOH", "TX"))
+
+fill <- "#4271AE"
+lines <- "#1F3552"
+ggplot(PC_db_sum, aes(x =DB, y= Per, col = groups)) +
+  geom_boxplot(colour = "grey", fill= "white", varwidth = TRUE)+
+  geom_jitter(size = 0.4, position = position_dodge(width = 0.5))+
+  theme(axis.text.x=element_text(angle=90,hjust=1), text = element_text(size=5)) +   theme_bw() + coord_fixed(ratio = 0.05) +ylim(0,100)
+
+ggplot(PC_db_sum, aes(x =DB, y = Per, fill = DB)) +
+  geom_violin() 
+
+
+#ggsave(file="PC_db_violin_wt.eps")
+#ggsave(file="pc_DB_boxplot_wt.eps")
+```
+PC - LENGTH
+```{r}
+PC_len <- select(PC, -DB)
+PC_len_sum <- PC_len %>%
+    group_by(rep) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%
+    group_by(groups,rep,class,length)%>%
+    dplyr::summarise(Per=sum(sumper)*100)
+
+
+PC_len_sum$length <- factor(PC_len_sum$length, levels = c("32","34","36","64","68", "70", "72"))
+PC_len_sum$groups <- factor(PC_len_sum$groups, levels = c( "Temperature", "Growth stage", "NaCl", "MetOH", "TX"))
+
+fill <- "#4271AE"
+lines <- "#1F3552"
+ggplot(PC_len_sum, aes(x =length, y= Per, col = groups)) +
+  geom_boxplot(colour = "grey", fill= "white", varwidth = TRUE)+
+  geom_jitter(size = 0.4, position = position_dodge(width = 0.5))+
+  theme(axis.text.x=element_text(angle=90,hjust=1), text = element_text(size=5)) +   theme_bw() + coord_fixed(ratio = 0.05) +ylim(0,100)
+
+ggplot(PC_len_sum, aes(x =length, y = Per, fill = length)) +
+  geom_violin() 
+
+
+
+#ggsave(file="PC_len_violin_wt.eps")
+#ggsave(file="pc_len_boxplot_wt.eps")
+```
+PE
+
+```{r}
+PE <- filter(db_gat_sum, class == "PE")
+```
+PE - DB
+```{r}
+PE_db <- select(PE, -length)
+PE_db_sum <- PE_db %>%
+    group_by(rep) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%
+    group_by(groups,rep,class,DB )%>%
+    dplyr::summarise(Per=sum(sumper)*100)
+
+
+PE_db_sum$DB <- factor(PE_db_sum$DB, levels = c("0","1","2","3","4"))
+PE_db_sum$groups <- factor(PE_db_sum$groups, levels = c( "Temperature", "Growth stage", "NaCl", "MetOH", "TX"))
+fill <- "#4271AE"
+lines <- "#1F3552"
+ggplot(PE_db_sum, aes(x =DB, y= Per, col = groups)) +
+  geom_boxplot(colour = "grey", fill= "white", varwidth = TRUE)+
+  geom_jitter(size = 0.4, position = position_dodge(width = 0.5))+
+  theme(axis.text.x=element_text(angle=90,hjust=1), text = element_text(size=5)) +   theme_bw() + coord_fixed(ratio = 0.05) +ylim(0,100)
+
+ggplot(PE_db_sum, aes(x =DB, y = Per, fill = DB)) +
+  geom_violin() +   theme_bw()
+
+
+
+#ggsave(file="PE_DB_violin_wt.eps")
+#ggsave(file="PE_DB_boxplot_wt.eps")
+```
+
+PE - LENGTH
+```{r}
+PE_len <- select(PE, -DB)
+PE_len_sum <- PE_len %>%
+    group_by(rep) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%
+    group_by(groups,rep,class,length )%>%
+    dplyr::summarise(Per=sum(sumper)*100)
+
+
+
+PE_len_sum$length <- factor(PE_len_sum$length, levels = c("32","34","36","64","68", "70", "72"))
+PE_len_sum$groups <- factor(PE_len_sum$groups, levels = c( "Temperature", "Growth stage", "NaCl", "MetOH", "TX"))
+
+fill <- "#4271AE"
+lines <- "#1F3552"
+ggplot(PE_len_sum, aes(x =length, y= Per, col = groups)) +
+  geom_boxplot(colour = "grey", fill= "white", varwidth = TRUE)+
+  geom_jitter(size = 0.4, position = position_dodge(width = 0.5))+
+  theme(axis.text.x=element_text(angle=90,hjust=1), text = element_text(size=5)) +   theme_bw() + coord_fixed(ratio = 0.05) +ylim(0,100)
+
+ggplot(PE_len_sum, aes(x =length, y = Per, fill = length)) +
+  geom_violin() 
+
+
+
+#ggsave(file="PE-LEN_violin_wt.eps")
+#ggsave(file="PE-LEN_boxplot_wt.eps")
+```
+PG
+
+```{r}
+PG <- filter(db_gat_sum, class == "PG")
+```
+PG - DB
+```{r}
+PG_db <- select(PG, -length)
+PG_db_sum <- PG_db %>%
+    group_by(rep) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%
+    group_by(groups,rep,class,DB )%>%
+    dplyr::summarise(Per=sum(sumper)*100)
+
+
+PG_db_sum$DB <- factor(PG_db_sum$DB, levels = c("0","1","2","3","4"))
+PG_db_sum$groups <- factor(PG_db_sum$groups, levels = c( "Temperature", "Growth stage", "NaCl", "MetOH", "TX"))
+fill <- "#4271AE"
+lines <- "#1F3552"
+ggplot(PG_db_sum, aes(x =DB, y= Per, col = groups)) +
+  geom_boxplot(colour = "grey", fill= "white", varwidth = TRUE)+
+  geom_jitter(size = 0.4, position = position_dodge(width = 0.5))+
+  theme(axis.text.x=element_text(angle=90,hjust=1), text = element_text(size=5)) +   theme_bw() + coord_fixed(ratio = 0.05) +ylim(0,100)
+
+ggplot(PG_db_sum, aes(x =DB, y = Per, fill = DB)) +
+  geom_violin() 
+
+
+#ggsave(file="PG_DB_violin_wt.eps")
+#ggsave(file="pg_DB_boxplot_wt.eps")
+```
+PG - LENGTH
+```{r}
+PG_len <- select(PG, -DB)
+PG_len_sum <- PG_len %>%
+    group_by(rep) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%
+    group_by(groups,rep,class,length )%>%
+    dplyr::summarise(Per=sum(sumper)*100)
+
+
+
+PG_len_sum$length <- factor(PG_len_sum$length, levels = c("32","34","36","64","68", "70", "72"))
+PG_len_sum$groups <- factor(PG_len_sum$groups, levels = c( "Temperature", "Growth stage", "NaCl", "MetOH", "TX"))
+
+fill <- "#4271AE"
+lines <- "#1F3552"
+ggplot(PG_len_sum, aes(x =length, y= Per, col = groups)) +
+  geom_boxplot(colour = "grey", fill= "white", varwidth = TRUE)+
+  geom_jitter(size = 0.4, position = position_dodge(width = 0.5))+
+  theme(axis.text.x=element_text(angle=0,hjust=1), text = element_text(size=5)) +  
+  theme_bw() +
+  coord_fixed(ratio = 0.05)+ylim(0,100)
+
+ggplot(PG_len_sum, aes(x =length, y = Per, fill = length)) +
+  geom_violin() 
+
+
+
+#ggsave(file="PG_LEN_violin_wt.eps")
+#ggsave(file="pg_len_boxplot_wt.eps")
+```
+
+
+```{r}
+tempWT <- sd_lipid %>% 
+  select(WT,starts_with("13"), starts_with("20"), starts_with("30"), starts_with("4") )
+  
+tempWT <- tempWT %>% 
+  select(starts_with("4")) %>%
+  rowwise() %>% 
+  do(data.frame(mean_4 = mean(unlist(.)))) %>% 
+  bind_cols(tempWT, .)
+#calculate MEAN
+tempWT <- tempWT %>% 
+  select(starts_with("13")) %>%
+  rowwise() %>% 
+  do(data.frame(mean_13 = mean(unlist(.)))) %>% 
+  bind_cols(tempWT, .)
+
+tempWT <- tempWT %>% 
+  select(starts_with("20")) %>%
+  rowwise() %>% 
+  do(data.frame(mean_20 = mean(unlist(.)))) %>% 
+  bind_cols(tempWT, .)
+
+tempWT <- tempWT %>% 
+  select(starts_with("30")) %>%
+  rowwise() %>% 
+  do(data.frame(mean_30 = mean(unlist(.)))) %>% 
+  bind_cols(tempWT, .)
+
+
+
+#calculate sd
+tempWT <- tempWT %>% 
+  select(starts_with("4")) %>%
+  rowwise() %>% 
+  do(data.frame(sd_4 = sd(unlist(.)))) %>% 
+  bind_cols(tempWT, .)
+tempWT <- tempWT %>% 
+  select(starts_with("13")) %>%
+  rowwise() %>% 
+  do(data.frame(sd_13 = sd(unlist(.)))) %>% 
+  bind_cols(tempWT, .)
+
+tempWT <- tempWT %>% 
+  select(starts_with("20")) %>%
+  rowwise() %>% 
+  do(data.frame(sd_20 = sd(unlist(.)))) %>% 
+  bind_cols(tempWT, .)
+
+tempWT <- tempWT %>% 
+  select(starts_with("30")) %>%
+  rowwise() %>% 
+  do(data.frame(sd_30 = sd(unlist(.)))) %>% 
+  bind_cols(tempWT, .)
+
+mean_sd_temp <-tempWT %>% 
+  select(starts_with("sd"), WT) %>%
+  group_by(WT) %>% 
+  summarise_all(funs(mean(.) ))
+
+
+mean_sd_gat_temp <- mean_sd_temp %>% gather(sd, mean, -one_of("WT")) %>% tbl_df()
+
+ggplot(mean_sd_gat_temp, aes(x = sd, y= mean)) + geom_bar(stat = "identity", position = "dodge") +ggtitle("sd for all lipids") + theme(axis.text.x=element_text(size=5, angle=90))
+
+```
+TEMP 4-13
+```{r}
+temp4_13 <- tempWT %>%
+  select(WT,starts_with("4"), starts_with("13"), mean_4, mean_13, sd_4, sd_13)
+
+temp4_13 <- temp4_13 %>%
+  mutate(av = mean_4 - mean_13, sd = sd_4 - sd_13)
+#order
+x <- c("PE [36:2]", "DIP","PE [36:1]", "PG [34:2]", "PE [34:1]", "PG [34:1]", "PE [34:2]", "PC [36:2]", "CL [72:2]", "PC [34:2]", "PC [34:1]", "PG [32:1]", "CL [68:2]", "PE [32:1]", "PC [32:1]", "PC [32:2]", "CL [64:0]", "CL [68:4]", "PC [36:4]", "CL [70:4]", "PG [36:3]", "mDIP", "PC [34:4]", "PC [36:3]", "PG [36:2]", "PE [36:3]", "PC [34:3]")
+temp4_13$WT <- factor(temp4_13$WT, levels = c("PE [36:2]", "DIP","PE [36:1]", "PG [34:2]", "PE [34:1]", "PG [34:1]", "PE [34:2]", "PC [36:2]", "CL [72:2]", "PC [34:2]", "PC [34:1]", "PG [32:1]", "CL [68:2]", "PE [32:1]", "PC [32:1]", "PC [32:2]", "CL [64:0]", "CL [68:4]", "PC [36:4]", "CL [70:4]", "PG [36:3]", "mDIP", "PC [34:4]", "PC [36:3]", "PG [36:2]", "PE [36:3]", "PC [34:3]"))
+
+temp4_13 <- temp4_13 %>%
+  mutate(WT =  factor(WT, levels = x)) %>%
+  arrange(WT)
+
+temp4_13 <- temp4_13 %>%
+  mutate(av_abs = abs(av), av_all = mean(abs(av)))
+
+
+
+#CHECK WHITH VALUES ARE OVER MEAN
+temp4_13 <- temp4_13 %>%
+  mutate(record = ifelse(av_abs < av_all, 
+                         "FALSE",
+                                "TRUE"))
+colvec4_13 <- character(dim(temp4_13)[1])
+colvec4_13 <- ifelse(temp4_13$record, "red", "black")
+
+
+
+ggplot(temp4_13, aes(WT)) +
+  geom_bar(aes(weight = av))+
+  geom_errorbar(aes(ymin=av-sd, ymax=av+sd), width=.2,
+                 position=position_dodge(.9)) +
+  coord_flip(ylim = c(-15,15)) +
+  theme_bw()+
+  theme(axis.text.y = element_text(colour=colvec4_13)) +
+  ggtitle("Temp 4-13 C")
+#ggsave(file="temp4_13-ORDER.eps")
+```
+TEMP 13 - 20
+```{r}
+temp13_20 <- tempWT %>%
+  select(WT,starts_with("13"), starts_with("20"), mean_20, mean_13, sd_20, sd_13)
+
+temp13_20 <- temp13_20 %>%
+  mutate(av = mean_13 - mean_20, sd = sd_13 - sd_20)
+#order variables
+#temp13_20 <- temp13_20[order(temp13_20$av), ]
+x <- c("PE [36:2]", "DIP","PE [36:1]", "PG [34:2]", "PE [34:1]", "PG [34:1]", "PE [34:2]", "PC [36:2]", "CL [72:2]", "PC [34:2]", "PC [34:1]", "PG [32:1]", "CL [68:2]", "PE [32:1]", "PC [32:1]", "PC [32:2]", "CL [64:0]", "CL [68:4]", "PC [36:4]", "CL [70:4]", "PG [36:3]", "mDIP", "PC [34:4]", "PC [36:3]", "PG [36:2]", "PE [36:3]", "PC [34:3]")
+temp13_20$WT <- factor(temp13_20$WT, levels = c("PE [36:2]", "DIP","PE [36:1]", "PG [34:2]", "PE [34:1]", "PG [34:1]", "PE [34:2]", "PC [36:2]", "CL [72:2]", "PC [34:2]", "PC [34:1]", "PG [32:1]", "CL [68:2]", "PE [32:1]", "PC [32:1]", "PC [32:2]", "CL [64:0]", "CL [68:4]", "PC [36:4]", "CL [70:4]", "PG [36:3]", "mDIP", "PC [34:4]", "PC [36:3]", "PG [36:2]", "PE [36:3]", "PC [34:3]"))
+
+temp13_20 <- temp13_20 %>%
+  mutate(WT =  factor(WT, levels = x)) %>%
+  arrange(WT)
+
+temp13_20 <- temp13_20 %>%
+  mutate(av_abs = abs(av), av_all = mean(abs(av)))
+#CHECK WHITH VALUES ARE OVER MEAN
+temp13_20 <- temp13_20 %>%
+  mutate(record = ifelse(av_abs < av_all, 
+                         "FALSE",
+                                "TRUE"))
+colvec_13_20 <- character(dim(temp13_20)[1])
+colvec_13_20 <- ifelse(temp13_20$record, "red", "black")
+#order variables
+#temp13_20 <- transform(temp13_20,WT = reorder(WT, av))
+
+
+
+
+ggplot(temp13_20, aes(WT)) +
+  geom_bar(aes(weight = av))+
+  geom_errorbar(aes(ymin=av-sd, ymax=av+sd), width=.2,
+                 position=position_dodge(.9)) +
+  coord_flip(ylim = c(-5,5)) +
+  theme_bw()+
+  theme(axis.text.y = element_text(colour=colvec_13_20)) +
+  ggtitle("Temp 13-20 C")
+#ggsave(file="temp13_20-ORDER.eps")
+```
+TEMP 20 - 30
+```{r}
+temp20_30 <- tempWT %>%
+  select(WT,starts_with("20"), starts_with("30"), mean_20, mean_30, sd_20, sd_30)
+
+temp20_30 <- temp20_30 %>%
+  mutate(av = mean_20 - mean_30, sd = sd_20 - sd_30)
+#order variables
+temp20_30 <- temp20_30[order(temp20_30$av), ]
+
+temp20_30 <- temp20_30 %>%
+  mutate(av_abs = abs(av), av_all = mean(abs(av)))
+#CHECK WHITH VALUES ARE OVER MEAN
+temp20_30 <- temp20_30 %>%
+  mutate(record = ifelse(av_abs < av_all, 
+                         "FALSE",
+                                "TRUE"))
+colvec <- character(dim(temp20_30)[1])
+colvec <- ifelse(temp20_30$record, "red", "black")
+
+
+#order
+temp20_30 <- transform(temp20_30, 
+                          WT = reorder(WT, av))
+
+
+ggplot(temp20_30, aes(WT)) +
+  geom_bar(aes(weight = av))+
+  geom_errorbar(aes(ymin=av-sd, ymax=av+sd), width=.2,
+                 position=position_dodge(.9)) +
+  coord_flip(ylim = c(-5,5)) +
+  theme_bw()+
+  theme(axis.text.y = element_text(colour=colvec)) +
+  ggtitle("Temp 20-30 C")
+#ggsave(file="temp20_30.eps")
+```
+
+
+```{r}
+tempALL <- tempWT %>%
+  select(WT,mean_4,mean_30,mean_20, mean_13, sd_20, sd_13, sd_4, sd_30)
+
+tempALL <- tempALL %>%
+  mutate(av13_20 = mean_13 - mean_20, sd13_20 = sd_13 - sd_20,
+         av4_13 = mean_4 - mean_13, sd4_13 = sd_4 - sd_13,
+         av20_30 = mean_20 - mean_30, sd20_30 = sd_20 - sd_30)
+
+only_imp <- tempALL %>%
+  select(WT, av13_20,av4_13,av20_30)
+only_imp_gat<-only_imp%>% gather(replicate, mean, -one_of("WT")) %>% tbl_df
+tempALL_gat <- tempALL%>% gather(replicate, membr_perc, -one_of("WT")) %>% tbl_df
+
+only_imp_gat <- transform(only_imp_gat, 
+                          WT = reorder(WT, mean))
+only_imp_gat$replicate <- factor(only_imp_gat$replicate,levels = c("av4_13", "av13_20", "av20_30"))
+ ggplot(only_imp_gat, aes(WT, mean)) +   
+  geom_bar(aes(fill = replicate), position = "dodge", stat="identity") +
+   coord_flip() 
+   theme_bw()
+```
+
+CLASSES - only temp
+```{r}
+temp_class <- tempWT %>%
+  select(mean_4, mean_13, mean_20, mean_30, WT)
+
+
+temp_class<-temp_class%>%separate(WT, into = c("class", "bal"),sep =  " ")
+temp_class <- temp_class %>% select(-bal)
+
+temp_class_gat <- temp_class %>% gather(rep, num, -one_of("class"))
+temp_class_gat$class <-  sub("^m", "", temp_class_gat$class )
+temp_class_gat$class <-  sub("DIP", "DIPs", temp_class_gat$class )
+#wt_class_gat_sum <-wt_class_gat %>% group_by(rep, class) %>% summarise_all(funs(sum(.)))
+
+temp_class_gat_sum <- temp_class_gat %>%
+    group_by(rep) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%
+    group_by(rep,class)%>%
+    dplyr::summarise(Per=sum(sumper)*100, sd=sd(sumper))
+
+temp_class_gat_sum$class <- factor(temp_class_gat_sum$class, levels = c("PG","PE", "PC", "CL", "DIPs") )
+
+temp_class_gat_sum$rep <- sub("mean_4", "4C", temp_class_gat_sum$rep)
+temp_class_gat_sum$rep <- sub("mean_13", "13C", temp_class_gat_sum$rep)
+temp_class_gat_sum$rep <- sub("mean_20", "20C", temp_class_gat_sum$rep)
+temp_class_gat_sum$rep <- sub("mean_30", "30C", temp_class_gat_sum$rep)
+
+db_gat_sum$rep<-sub("\\.$","",db_gat_sum$rep)
+temp_class_gat_sum$rep <- factor(temp_class_gat_sum$rep, levels = c("4C","13C", "20C", "30C") )
+
+
+last <- filter(temp_class_gat_sum, rep == "30C")
+ggplot(temp_class_gat_sum, aes(x = rep, y = Per)) + 
+  geom_point(aes(colour = class), size = 5) +
+  geom_line(aes(colour = class, group = class)) +
+  #geom_text_repel(data = last_text, aes(x=rep, y = Per, label = length), hjust = 0, vjust = 0.35) +
+  geom_text_repel(
+    data = filter(temp_class_gat_sum, rep == "30C"),
+    aes(label = class),
+    size = 2,
+    segment.color = NA,
+    nudge_x = 0.1
+  ) +
+  geom_errorbar(aes(ymin=Per-sd, ymax=Per+sd), width=.01) +
+  scale_color_grey() +
+  theme_bw() +
+  theme(legend.position = "none")+
+  coord_equal(ratio =1/20) +
+  labs(title = "CLASSES - only temp")+
+  ylim(0,100) 
+#ggsave(file="class_tem_grey.eps", width = 16, height = 9, dpi = 120)
+```
+
+
+DB - Temp
+
+```{r}
+temp_DB<-wt 
+
+cond1 <-  temp_DB$WT == "DIP"
+temp_DB <- temp_DB[!cond1,]
+cond2 <- temp_DB$WT == "mDIP"
+temp_DB <- temp_DB[!cond2,]
+cond3 <- temp_DB$DB == "0"
+temp_DB <- temp_DB[!cond3,]
+
+temp_DB<-temp_DB %>% select( DB,starts_with("4"), starts_with("13"), starts_with("20"), starts_with("30") )
+
+temp_DB_gat <- temp_DB %>% gather(rep, num, -one_of("DB"))
+temp_DB_gat$rep<-sub("\\d$","",temp_DB_gat$rep)
+temp_DB_gat$rep<-sub("\\.$","",temp_DB_gat$rep)
+
+temp_DB_gat <- temp_DB_gat %>% filter()
+#wt_DB_gat_sum <-wt_DB_gat %>% group_by(rep, DB) %>% summarise_all(funs(sum(.)))
+temp_DB_gat_sum <-
+    temp_DB_gat%>%
+    group_by(rep) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%group_by(rep,DB)%>%
+    dplyr::summarise(Per =sum(sumper)*100, sd = sd(sumper))
+
+
+
+
+temp_DB_gat_sum$DB <- factor(temp_DB_gat_sum$DB, levels = c("1", "2", "3", "4") )
+
+
+
+temp_DB_gat_sum$rep <- factor(temp_DB_gat_sum$rep, levels = c("4C ","13C ", "20C ", "30C ") )
+
+col_gold <- c('gray20','gray30','gray40','gray60')
+
+ggplot(temp_DB_gat_sum, aes(x = rep, y = Per)) + 
+  geom_point(aes(colour = DB), size = 5) +
+  geom_line(aes(colour = DB, group = DB)) +
+  geom_text(
+    data = filter(temp_DB_gat_sum, rep == "30C "),
+    aes(label = DB),
+    size = 2,
+    segment.color = NA,
+    nudge_x = 0.1
+  ) +
+  geom_errorbar(aes(ymin=Per-sd, ymax=Per+sd), width=.01) +
+  theme_bw()+
+  theme(legend.position = "none")+
+  coord_equal(ratio =1/20)+
+  labs(title = "DB - only temp") +
+   ylim(0,100) +
+  scale_color_grey()
+#ggsave(file="db_tem_2.eps",width = 16, height = 9, dpi = 120)
+```
+LENGTH - TEMP
+```{r}
+temp_LEN<-wt 
+
+cond1 <-  temp_LEN$WT == "DIP"
+temp_LEN <- temp_LEN[!cond1,]
+cond2 <- temp_LEN$WT == "mDIP"
+temp_LEN <- temp_LEN[!cond2,]
+cond3 <- temp_LEN$length == "64"
+temp_LEN <- temp_LEN[!cond3,]
+cond4 <- temp_LEN$length == "68"
+temp_LEN <- temp_LEN[!cond4,]
+cond5 <- temp_LEN$length == "70"
+temp_LEN <- temp_LEN[!cond5,]
+cond6 <- temp_LEN$length == "72"
+temp_LEN <- temp_LEN[!cond6,]
+
+temp_len<-temp_LEN %>% select( length,starts_with("4"), starts_with("13"), starts_with("20"), starts_with("30") )
+
+temp_len_gat <- temp_len %>% gather(rep, num, -one_of("length"))
+temp_len_gat$rep<-sub("\\d$","",temp_len_gat$rep)
+temp_len_gat$rep<-sub("\\.$","",temp_len_gat$rep)
+#wt_DB_gat_sum <-wt_DB_gat %>% group_by(rep, DB) %>% summarise_all(funs(sum(.)))
+temp_len_gat_sum <-
+    temp_len_gat%>%
+    group_by(rep) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%group_by(rep,length)%>%
+    dplyr::summarise(Per =sum(sumper)*100, sd = sd(sumper))
+
+
+
+
+temp_len_gat_sum$length <- factor(temp_len_gat_sum$length, levels = c("32","34", "36") )
+
+
+
+temp_len_gat_sum$rep <- factor(temp_len_gat_sum$rep, levels = c("4C ","13C ", "20C ", "30C ") )
+
+last_text <- temp_len_gat_sum[!duplicated(temp_len_gat_sum$length, fromLast = F), ]
+last_text <- filter(temp_len_gat_sum, rep == "30C ")
+
+col_brown <- c('grey33','grey69','grey88')
+
+ggplot(temp_len_gat_sum, aes(x = rep, y = Per)) + 
+  geom_point(aes(color = length), size = 5) +
+  geom_line(aes(colour = length, group = length)) +
+  #geom_dl(aes(label=length),method="last.points")
+  #geom_text_repel(data = last_text, aes(x=rep, y = Per, label = length), hjust = 0, vjust = 0.35)+
+   geom_text_repel(
+    data = filter(temp_len_gat_sum, rep == "30C "),
+    aes(label = length),
+    size = 2
+  ) +
+  geom_errorbar(aes(ymin=Per-sd, ymax=Per+sd), width=.01) +
+  theme_bw()+
+  theme(legend.position = "none")+
+  coord_equal(ratio =1/20)+
+  labs(title = "LENGTH - only temp") +
+  scale_color_grey() +
+  ylim(0,100)
+#ggsave(file="len_tem.eps",width = 16, height = 9, dpi = 120)
+
+```
+DB - TEMP - CLASS: PC	PE	PG
+
+```{r}
+temp_byclass<-wt 
+
+temp_byclass<-temp_byclass%>%separate(WT, into = c("class", "bal"),sep =  " ")
+temp_byclass <- temp_byclass %>% select(-bal)
+
+cond1 <-  temp_byclass$class == "DIP"
+temp_byclass <- temp_byclass[!cond1,]
+cond2 <- temp_byclass$class == "mDIP"
+temp_byclass <- temp_byclass[!cond2,]
+cond3 <- temp_byclass$class == "CL"
+temp_byclass <- temp_byclass[!cond3,]
+
+
+temp_byclass<-temp_byclass %>% select( class, DB ,starts_with("4"), starts_with("13"), starts_with("20"), starts_with("30") )
+
+
+
+temp_byclass_gat <- temp_byclass %>% gather(rep, num, -one_of("class", "DB"))
+
+temp_byclass_gat$rep<-sub("\\d$","",temp_byclass_gat$rep)
+temp_byclass_gat$rep<-sub("\\.$","",temp_byclass_gat$rep)
+
+
+temp_byclass_gat_sum <- temp_byclass_gat %>%
+    group_by(rep,class) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%
+    group_by(rep,class,DB)%>%
+    dplyr::summarise(Per=sum(sumper)*100, sd=sd(sumper))
+
+temp_byclass_gat_sum$class <- factor(temp_byclass_gat_sum$class, levels = c("PG","PE", "PC") )
+
+temp_byclass_gat_sum$rep <- factor(temp_byclass_gat_sum$rep,
+                                   levels = c("4C ","13C ", "20C ", "30C ") )
+
+temp_byclass_gat_sum$DB <- factor(temp_byclass_gat_sum$DB, levels = c("1","2", "3","4") )
+
+ggplot(temp_byclass_gat_sum, aes(x = rep, y = Per), fill = "gray") + 
+  geom_point(aes(colour = DB), size = 5) +
+  geom_line(aes(colour = DB, group = DB)) +
+  facet_grid(. ~ class) +
+  geom_text_repel(
+    data = filter(temp_byclass_gat_sum, rep == "4C "),
+    aes(label = DB),
+    size = 2,
+    segment.color = NA,
+    nudge_x = 0.1
+  ) +
+  geom_errorbar(aes(ymin=Per-sd, ymax=Per+sd), width=.01) +
+  theme_bw() + 
+  theme(legend.position = "none")+
+  coord_equal(ratio =1/20) +
+  labs(title = "db for each class - only temp")+
+  ylim(0,100) +
+  scale_color_grey()
+  
+#ggsave(file="classDB_temp.eps", width = 16, height = 9, dpi = 120)
+```
+
+
+LENGTH - TEMP - CLASS: PC	PE	PG
+
+```{r}
+temp_byclass<-wt 
+
+temp_byclass<-temp_byclass%>%separate(WT, into = c("class", "bal"),sep =  " ")
+temp_byclass <- temp_byclass %>% select(-bal)
+
+cond1 <-  temp_byclass$class == "DIP"
+temp_byclass <- temp_byclass[!cond1,]
+cond2 <- temp_byclass$class == "mDIP"
+temp_byclass <- temp_byclass[!cond2,]
+cond3 <- temp_byclass$class == "CL"
+temp_byclass <- temp_byclass[!cond3,]
+
+
+temp_byclass<-temp_byclass %>% select( class, length ,starts_with("4"), starts_with("13"), starts_with("20"), starts_with("30") )
+
+
+
+LEN_byclass_gat <- temp_byclass %>% gather(rep, num, -one_of("class", "length"))
+
+LEN_byclass_gat$rep<-sub("\\d$","",LEN_byclass_gat$rep)
+LEN_byclass_gat$rep<-sub("\\.$","",LEN_byclass_gat$rep)
+
+
+LEN_byclass_gat_sum <- LEN_byclass_gat %>%
+    group_by(rep,class) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%
+    group_by(rep,class,length)%>%
+    dplyr::summarise(Per=sum(sumper)*100, sd=sd(sumper))
+
+LEN_byclass_gat_sum$class <- factor(LEN_byclass_gat_sum$class, levels = c("PG","PE", "PC") )
+
+LEN_byclass_gat_sum$rep <- factor(LEN_byclass_gat_sum$rep,
+                                   levels = c("4C ","13C ", "20C ", "30C ") )
+LEN_byclass_gat_sum$length <- factor(LEN_byclass_gat_sum$length, levels = c("32","34", "36") )
+
+ggplot(LEN_byclass_gat_sum, aes(x = rep, y = Per)) + 
+  geom_point(aes(colour = length), size = 5) +
+  geom_line(aes(colour = length, group = length)) +
+  facet_grid(. ~ class) +
+  geom_text(
+    data = filter(LEN_byclass_gat_sum, rep == "4C "),
+    aes(label = length),
+    size = 2,
+    segment.color = NA,
+    nudge_x = 0.1
+  ) +
+  geom_errorbar(aes(ymin=Per-sd, ymax=Per+sd), width=.01) +
+  theme_bw() + 
+  theme(legend.position = "none")+
+  coord_equal(ratio =1/20) +
+  labs(title = "db for each class - only temp")+
+  ylim(0,100)+
+ scale_color_grey()
+#ggsave(file="classLEN_tempGREY.eps", width = 16, height = 9, dpi = 120)
+```
+
+SLOPCHART!!
+```{r}
+library(devtools)
+#install_github("leeper/slopegraph")#install Leeper's package from Github
+library(slopegraph)
+
+s <- wt %>% select(WT,starts_with("4"), starts_with("13"), starts_with("20"), starts_with("30"))
+
+
+s <- s %>% 
+  select(starts_with("4")) %>%
+  rowwise() %>% 
+  do(data.frame(mean_4c = mean(unlist(.)))) %>% 
+  bind_cols(s, .)
+
+s <- s %>% 
+  select(starts_with("13")) %>%
+  rowwise() %>% 
+  do(data.frame(mean_13c = mean(unlist(.)))) %>% 
+  bind_cols(s, .)
+
+s <- s %>% 
+  select(starts_with("20")) %>%
+  rowwise() %>% 
+  do(data.frame(mean_20c = mean(unlist(.)))) %>% 
+  bind_cols(s, .)
+
+s <- s %>% 
+  select(starts_with("30")) %>%
+  rowwise() %>% 
+  do(data.frame(mean_30c = mean(unlist(.)))) %>% 
+  bind_cols(s, .)
+
+
+mean_temp <- s %>% select(WT, starts_with("mean"))
+mean_temp <- as.data.frame(mean_temp)
+mean_temp$mean_4c <- round(mean_temp$mean_4c,4)
+mean_temp$mean_13c <- round(mean_temp$mean_13c,4)
+mean_temp$mean_20c <- round(mean_temp$mean_20c,4)
+mean_temp$mean_30c <- round(mean_temp$mean_30c,4)
+PC <- mean_temp %>% filter(grepl("PC",mean_temp$WT))
+slp_gat <- mean_temp %>% gather(rep, num, -one_of("WT"))
+PC <-PC %>%  column_to_rownames(var = "WT")
+
+
+
+slopegraph(PC,
+           xlim = c(.5,ncol(PC)+.5),
+            ylim = c(min(PC)+diff(range(PC))/100,max(PC)+diff(range(PC))/100),
+          cex.lab = 0.5, cex.num = 0.5,
+            xlabels = c('4 C','13 C','20 C','30 C'))
+
+
+
+#ggsave("slopchart.eps",plot = last_plot())
+```
+
+```{r}
+test <- temp_class_gat_sum %>% select(-sd)
+test$rep <- sub("13C", "13", test$rep )
+test$rep <- sub("20C", "20", test$rep )
+test$rep <- sub("4C", "4", test$rep )
+test$rep <- sub("30C", "30", test$rep )
+test <- as.data.frame(test)
+test$rep <- as.numeric(test$rep)
+y.names<- c('4C','13C','20C','30C')
+slp<- build_slopegraph(test, x = 'rep', y='Per', group='class', method="tufte", min.space=0.04)
+slp<- transform(slp, x=factor(x, levels=c(4,13,20,30), labels=y.names), y=round(slp$y,digits=4))
+
+
+##  PLOT SLOPEGRAPH using ggplot
+
+ylabs<- vector()
+yvals<- vector()
+
+ylabs <- subset(slp, x==head(x,1))$group
+yvals <- subset(slp, x==head(x,1))$ypos
+fontSize <- 3
+  
+ggplot(slp,aes(x=x,y=ypos, colour= "dodgerblue")) +
+    theme_bw() +
+    xlab("") +
+    geom_line(aes(group= group),size=1) +
+    scale_color_manual(values= "dodgerblue") +
+    geom_point(colour="white",size=10) +
+    geom_text(aes(label=y),size=fontSize) +
+    scale_y_continuous(name="", breaks=yvals, labels=ylabs) +
+    theme(legend.position="none",
+          axis.text.x=element_text(size = 9, angle= 0, face="bold",hjust=1),
+          axis.text.y=element_text(size = 9, angle= 0, face="bold")) 
+
+
+```
+
+
+```{r}
+slp_gat <- mean_temp %>% gather(rep, num, -one_of("WT"))
+
+slp_gat$rep <- sub("mean_13c", "13", slp_gat$rep )
+slp_gat$rep <- sub("mean_20c", "20", slp_gat$rep )
+slp_gat$rep <- sub("mean_4c", "4", slp_gat$rep )
+slp_gat$rep <- sub("mean_30c", "30", slp_gat$rep )
+slp_gat <- as.data.frame(slp_gat)
+slp_gat$rep <- as.numeric(slp_gat$rep)
+y.names<- c('4C','13C','20C','30C')
+
+slp<- build_slopegraph(slp_gat, x = 'rep', y='num', group='WT', method="tufte", min.space=0.04)
+slp<- transform(slp, x=factor(x, levels=c(4,13,20,30), labels=y.names), y=round(slp$y,digits=2))
+
+
+##  PLOT SLOPEGRAPH using ggplot
+
+ylabs<- vector()
+yvals<- vector()
+
+ylabs <- subset(slp, x==head(x,1))$group
+yvals <- subset(slp, x==head(x,1))$ypos
+fontSize <- 3
+  
+ggplot(slp,aes(x=x,y=ypos)) +
+    theme_bw() +
+    xlab("") +
+    geom_line(aes(group= group),size=0.5) +
+    scale_color_manual(values= "black") +
+    geom_point(colour="white",size=10) +
+    geom_text(aes(label=y),size=fontSize) +
+    scale_y_continuous(name="", breaks=yvals, labels=ylabs) +
+    theme(legend.position="none",
+          axis.text.x=element_text(size = 9, angle= 0,hjust=1),
+          axis.text.y=element_text(size = 9 , angle= 0)) 
+
+ #ggsave(file="slopegraph-all.eps")
+```
+```{r}
+data_slop_change <- mean_temp %>% 
+  select(starts_with("mean")) %>%
+  rowwise() %>% 
+  do(data.frame(change = (max(unlist(.))/min(unlist(.))))) %>% 
+  bind_cols(mean_temp, .)
+
+data_slop_change<-arrange(data_slop_change, change)
+cond2 <- data_slop_change$WT == "PC [36:4]"
+data_slop_change <- data_slop_change[!cond2,]
+order <- data_slop_change$WT
+  c( "PG [36:2]", "CL [70:4]", "PC [34:2]", "PC [36:2]", "mDIP" ,"PG [34:2]", "PE [34:2]","CL [68:2]", "PE [36:2]", "CL [68:4]", "DIP" , "CL [72:2]", "PC [32:2]" ,"PG [34:1]", "PC [34:3]", "PE [34:1]" ,"PG [36:3]" ,"PC [34:1]", "PE [32:1]", "PE [36:1]", "PG [32:1]","CL [64:0]" ,"PC [32:1]", "PE [36:3]" ,"PC [36:3]")
+
+cond1 <- slp$group == "PC [36:4]"
+slp <- slp[!cond1,]
+
+slp$group  <- ordered(slp$group , order)
+slp <-slp[with(slp, order(group)),]
+
+
+ylabs <- subset(slp, x==head(x,1))$group
+
+yvals <- subset(slp, x==head(x,1))$ypos
+fontSize <- 3
+
+ggplot(slp,aes(x=x,y=ypos)) +
+    theme_bw() +
+    xlab("") +
+    geom_line(aes(group=  group),size=0.5) +
+    scale_color_manual(values= "black") +
+    geom_point(colour="white",size=10) +
+    geom_text(aes(label=y),size=fontSize) +
+    scale_y_continuous(name="", breaks=yvals, labels=ylabs) +
+    theme(legend.position="none",
+          axis.text.x=element_text(size = 9, angle= 0,hjust=1),
+          axis.text.y=element_text(size = 9 , angle= 0)) 
+
+```
+
+
+
+SLOPCHART FOR PC
+```{r}
+
+PC_slp <- slp_gat %>% filter(grepl("PC", slp_gat$WT))
+
+y.names<- c('4C','13C','20C','30C')
+slp_pc<- build_slopegraph(PC_slp, x = 'rep', y='num', group='WT', method="tufte", min.space=0.04)
+slp_pc<- transform(slp_pc, x=factor(x, levels=c(4,13,20,30), labels=y.names), y=round(slp_pc$y,digits=2))
+
+
+##  PLOT SLOPEGRAPH using ggplot
+
+ylabs<- vector()
+yvals<- vector()
+
+ylabs <- subset(slp_pc, x==head(x,1))$group
+yvals <- subset(slp_pc, x==head(x,1))$ypos
+fontSize <- 3
+  
+ggplot(slp_pc,aes(x=x,y=ypos)) +
+    theme_bw() +
+    xlab("") +
+    geom_line(aes(group= group),size=0.5) +
+    scale_color_manual(values= "black") +
+    geom_point(colour="white",size=10) +
+    geom_text(aes(label=y),size=fontSize) +
+    scale_y_continuous(name="", breaks=yvals, labels=ylabs) +
+    theme(legend.position="none",
+          axis.text.x=element_text(size = 9, angle= 0,hjust=1),
+          axis.text.y=element_text(size = 9 , angle= 0)) 
+
+ #ggsave(file="slopegraph-pc.eps")
+```
+
+SLOPCHART FOR PE
+```{r}
+
+PE_slp <- slp_gat %>% filter(grepl("PE", slp_gat$WT))
+
+y.names<- c('4C','13C','20C','30C')
+slp_pe<- build_slopegraph(PE_slp, x = 'rep', y='num', group='WT', method="tufte", min.space=0.04)
+slp_pe<- transform(slp_pe, x=factor(x, levels=c(4,13,20,30), labels=y.names), y=round(slp_pe$y,digits=2))
+
+
+##  PLOT SLOPEGRAPH using ggplot
+
+ylabs<- vector()
+yvals<- vector()
+
+ylabs <- subset(slp_pe, x==head(x,1))$group
+yvals <- subset(slp_pe, x==head(x,1))$ypos
+fontSize <- 3
+  
+ggplot(slp_pe,aes(x=x,y=ypos)) +
+    theme_bw() +
+    xlab("") +
+    geom_line(aes(group= group),size=0.5) +
+    scale_color_manual(values= "black") +
+    geom_point(colour="white",size=10) +
+    geom_text(aes(label=y),size=fontSize) +
+    scale_y_continuous(name="", breaks=yvals, labels=ylabs) +
+    theme(legend.position="none",
+          axis.text.x=element_text(size = 9, angle= 0,hjust=1),
+          axis.text.y=element_text(size = 9 , angle= 0)) 
+
+ #ggsave(file="slopegraph-pe.eps")
+```
+
+SLOPCHART FOR PG
+```{r}
+
+PG_slp <- slp_gat %>% filter(grepl("PG", slp_gat$WT))
+
+y.names<- c('4C','13C','20C','30C')
+slp_pg<- build_slopegraph(PG_slp, x = 'rep', y='num', group='WT', method="tufte", min.space=0.04)
+slp_pg<- transform(slp_pg, x=factor(x, levels=c(4,13,20,30), labels=y.names), y=round(slp_pg$y,digits=2))
+
+
+##  PLOT SLOPEGRAPH using ggplot
+
+ylabs<- vector()
+yvals<- vector()
+
+ylabs <- subset(slp_pg, x==head(x,1))$group
+yvals <- subset(slp_pg, x==head(x,1))$ypos
+fontSize <- 3
+  
+ggplot(slp_pg,aes(x=x,y=ypos)) +
+    theme_bw() +
+    xlab("") +
+    geom_line(aes(group= group),size=0.5) +
+    scale_color_manual(values= "black") +
+    geom_point(colour="white",size=10) +
+    geom_text(aes(label=y),size=fontSize) +
+    scale_y_continuous(name="", breaks=yvals, labels=ylabs) +
+    theme(legend.position="none",
+          axis.text.x=element_text(size = 9, angle= 0,hjust=1),
+          axis.text.y=element_text(size = 9 , angle= 0)) 
+
+ #ggsave(file="slopegraph-pg.eps")
+```
+SLOPCHART FOR CL
+```{r}
+
+CL_slp <- slp_gat %>% filter(grepl("CL", slp_gat$WT))
+
+y.names<- c('4C','13C','20C','30C')
+slp_cl<- build_slopegraph(CL_slp, x = 'rep', y='num', group='WT', method="tufte", min.space=0.04)
+slp_cl<- transform(slp_cl, x=factor(x, levels=c(4,13,20,30), labels=y.names), y=round(slp_cl$y,digits=2))
+
+
+##  PLOT SLOPEGRAPH using ggplot
+
+ylabs<- vector()
+yvals<- vector()
+
+ylabs <- subset(slp_cl, x==head(x,1))$group
+yvals <- subset(slp_cl, x==head(x,1))$ypos
+fontSize <- 3
+  
+ggplot(slp_cl,aes(x=x,y=ypos)) +
+    theme_bw() +
+    xlab("") +
+    geom_line(aes(group= group),size=0.5) +
+    scale_color_manual(values= "black") +
+    geom_point(colour="white",size=10) +
+    geom_text(aes(label=y),size=fontSize) +
+    scale_y_continuous(name="", breaks=yvals, labels=ylabs) +
+    theme(legend.position="none",
+          axis.text.x=element_text(size = 9, angle= 0,hjust=1),
+          axis.text.y=element_text(size = 9 , angle= 0)) 
+
+ #ggsave(file="slopegraph-cl.eps")
+```
+SLOPCHART FOR DIPS
+```{r}
+
+DIP_slp <- slp_gat %>% filter(grepl("DIP", slp_gat$WT))
+
+y.names<- c('4C','13C','20C','30C')
+slp_dip<- build_slopegraph(DIP_slp, x = 'rep', y='num', group='WT', method="tufte", min.space=0.04)
+slp_dip<- transform(slp_dip, x=factor(x, levels=c(4,13,20,30), labels=y.names), y=round(slp_dip$y,digits=2))
+
+
+##  PLOT SLOPEGRAPH using ggplot
+
+ylabs<- vector()
+yvals<- vector()
+
+ylabs <- subset(slp_dip, x==head(x,1))$group
+yvals <- subset(slp_dip, x==head(x,1))$ypos
+fontSize <- 3
+  
+ggplot(slp_dip,aes(x=x,y=ypos)) +
+    theme_bw() +
+    xlab("") +
+    geom_line(aes(group= group),size=0.5) +
+    scale_color_manual(values= "black") +
+    geom_point(colour="white",size=10) +
+    geom_text(aes(label=y),size=fontSize) +
+    scale_y_continuous(name="", breaks=yvals, labels=ylabs) +
+    theme(legend.position="none",
+          axis.text.x=element_text(size = 9, angle= 0,hjust=1),
+          axis.text.y=element_text(size = 9 , angle= 0)) 
+
+ #ggsave(file="slopegraph-dip.eps")
+```
+
+```{r}
+PC_gat <- gather(PC, rep, num , -one_of("WT"))
+pc_df<- build_slopegraph(PC_gat, x = 'rep',y = 'num', group = 'WT', method = "tufte")
+
+#df <- transform(df, x=factor(x, levels=c('mean_4c','mean_13c','mean_20c','mean_30c'),
+#                             labels=c('4 C','13 C','20 C','30 C')),
+#                y=round(ypos, digits = 1))
+df_tofte_pc <- transform(pc_df, x=factor(variable),
+                y=round(value, digits = 1))
+##' Generate the raw plot
+gg.pc_tufte <- plot_slopegraph(df_tofte_pc) +
+  labs(title="Estimates abundance of lipids")
+gg.pc_tufte
+
+```
+
+
+```{r}
+slope <- temp_class_gat_sum %>% select(-sd)
+slope$Per <- round(slope$Per,2)
+mins <- group_by(slope, class) %>% 
+                   slice(which.min(Per))
+maxs <- group_by(slope, class) %>% 
+                    slice(which.max(Per))
+ends <- group_by(slope, class) %>% 
+                    filter(rep == "30C")
+
+quarts <- slope %>% group_by(rep) %>%
+  mutate(quart1 = quantile(Per, 0.25),
+            quart2 = quantile(Per, 0.75)) 
+
+#pdf("sparklines_ggplottest.pdf", height=10, width=8)
+ggplot(slope, aes(x=rep, y=Per)) + 
+  facet_grid(class ~ .) + 
+  geom_ribbon(data = quarts, aes(ymin = quart1, max = quart2), fill = 'grey90') +
+  geom_line(aes(group = 1), size=0.3) +
+  geom_point() +
+  geom_point(data = mins, col = 'red') +
+  geom_point(data = maxs, col = 'blue') +
+  geom_text(data = mins, aes(label = Per), vjust = -1, size = 2) +
+  geom_text_repel(data = maxs, aes(label = Per), size = 2 ) +
+  geom_text(data = ends, aes(label = Per), hjust = 0, nudge_x = 1) +
+  ylim(0,50) +
+  #geom_text(data = ends, aes(label = Per), hjust = 0, nudge_x = 5) +
+  #expand_limits(x = max(test$rep) + (0.25 * (max(test$Per) - min(test$Per)))) +
+  scale_x_discrete(breaks = c("4C", "13C", "20C", "30C")) +
+  #scale_y_continuous(expand = c(0.1, 0)) +
+  theme_tufte(base_size = 15, base_family = "Helvetica") +
+  theme( axis.text.y = element_blank(), 
+        axis.ticks = element_blank())
+#dev.off()
+
+
+```
+
+
+PCA of WT - only DB:
+
+```{r}
+temp_DB<-wt 
+
+cond1 <-  temp_DB$WT == "DIP"
+temp_DB <- temp_DB[!cond1,]
+cond2 <- temp_DB$WT == "mDIP"
+temp_DB <- temp_DB[!cond2,]
+cond3 <- temp_DB$DB == "0"
+temp_DB <- temp_DB[!cond3,]
+
+temp_DB <- select(temp_DB, -c(length, WT))
+
+
+temp_DB_gat <- temp_DB %>% gather(rep, num, -one_of("DB"))
+#temp_DB_gat$rep<-sub("\\d$","",temp_DB_gat$rep)
+#temp_DB_gat$rep<-sub("\\.$","",temp_DB_gat$rep)
+
+#wt_DB_gat_sum <-wt_DB_gat %>% group_by(rep, DB) %>% summarise_all(funs(sum(.)))
+temp_DB_gat_sum <-
+    temp_DB_gat%>%
+    group_by(rep) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%group_by(rep,DB)%>%
+    dplyr::summarise(Per =sum(sumper)*100)
+
+
+
+
+#temp_DB_gat_sum$DB <- factor(temp_DB_gat_sum$DB, levels = c("1", "2", "3", "4") )
+
+
+
+#temp_DB_gat_sum$rep <- factor(temp_DB_gat_sum$rep, levels = c("4C ","13C ", "20C ", "30C ") )
+
+
+db_spread <- spread(temp_DB_gat_sum, DB, Per)
+#rownames(lip_db_gather) <- lip_db_gather$con_type
+#lip_temp_gather<- lip_temp_gather%>% separate(con_type, into = c("type", "con"),sep =  "_")
+#db_spread$rep <- make.names(db_spread$rep, unique=TRUE)
+
+db_spread <- as.data.frame(db_spread)
+rownames(db_spread) <- db_spread$rep
+db_spread <- select(db_spread, -rep)
+
+
+
+wt.rep <- rownames(db_spread)
+wt.rep<-sub("^X","",wt.rep)
+wt.rep<-sub("\\d{1}$","",wt.rep)
+wt.rep<-sub("\\.$","",wt.rep) #remomve dot at the end
+
+#db_spread <- select(db_spread, -c(rep))
+
+prin_comp_wttwmp <- prcomp(db_spread, scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, 
+              obs.scale = 1, 
+              var.scale = 1 ,
+              groups = wt.rep,
+              ellipse = TRUE
+              #label = wt.rep
+)
+library(ggrepel)
+g <-g + geom_point(aes( colour=wt.rep), size = 1) +
+  geom_text_repel(aes(label = wt.rep, 
+                      col =wt.rep),
+                      size = 2,
+                      segment.color = 'grey50')
+g <-g + theme_bw()+  
+        theme( legend.position = "none") 
+
+g
+ #ggsave(file="pca_db-elipse.eps")
+
+```
+
+
+PCA of WT - only length:
+
+```{r}
+temp_DB<-wt 
+
+cond1 <-  temp_DB$WT == "DIP"
+temp_DB <- temp_DB[!cond1,]
+cond2 <- temp_DB$WT == "mDIP"
+temp_DB <- temp_DB[!cond2,]
+cond3 <- temp_DB$DB == "0"
+temp_DB <- temp_DB[!cond3,]
+
+temp_len <- select(temp_DB, -c(DB, WT))
+
+
+temp_len_gat <- temp_len %>% gather(rep, num, -one_of("length"))
+#temp_DB_gat$rep<-sub("\\d$","",temp_DB_gat$rep)
+#temp_DB_gat$rep<-sub("\\.$","",temp_DB_gat$rep)
+
+#wt_DB_gat_sum <-wt_DB_gat %>% group_by(rep, DB) %>% summarise_all(funs(sum(.)))
+temp_len_gat_sum <-
+    temp_len_gat%>%
+    group_by(rep) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%group_by(rep,length)%>%
+    dplyr::summarise(Per =sum(sumper)*100)
+
+
+
+
+#temp_DB_gat_sum$DB <- factor(temp_DB_gat_sum$DB, levels = c("1", "2", "3", "4") )
+
+
+
+#temp_DB_gat_sum$rep <- factor(temp_DB_gat_sum$rep, levels = c("4C ","13C ", "20C ", "30C ") )
+
+
+len_spread <- spread(temp_len_gat_sum, length, Per)
+#rownames(lip_db_gather) <- lip_db_gather$con_type
+#lip_temp_gather<- lip_temp_gather%>% separate(con_type, into = c("type", "con"),sep =  "_")
+#db_spread$rep <- make.names(db_spread$rep, unique=TRUE)
+
+len_spread <- as.data.frame(len_spread)
+rownames(len_spread) <- len_spread$rep
+len_spread <- select(len_spread, -rep)
+
+
+
+len.rep <- rownames(len_spread)
+len.rep<-sub("^X","",len.rep)
+len.rep<-sub("\\d{1}$","",len.rep)
+len.rep<-sub("\\.$","",len.rep) #remomve dot at the end
+
+#db_spread <- select(db_spread, -c(rep))
+
+prin_comp_wttwmp <- prcomp(len_spread, scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, 
+              obs.scale = 1, 
+              var.scale = 1 ,
+              groups = len.rep,
+              ellipse = TRUE
+              #label = wt.rep
+)
+
+g <-g + geom_point(aes( colour=len.rep), size = 1) +
+  geom_text_repel(aes(label = len.rep, 
+                      col =len.rep),
+                      size = 2,
+                      segment.color = 'grey50')
+g <-g + theme_bw()+  
+        theme( legend.position = "none") 
+
+g
+ #ggsave(file="pca_len-elipse.eps")
+
+```
+PCA of WT - only class:
+
+```{r}
+temp_DB<-wt 
+
+cond1 <-  temp_DB$WT == "DIP"
+temp_DB <- temp_DB[!cond1,]
+cond2 <- temp_DB$WT == "mDIP"
+temp_DB <- temp_DB[!cond2,]
+cond3 <- temp_DB$DB == "0"
+temp_DB <- temp_DB[!cond3,]
+
+temp_class <- select(temp_DB, -c(DB, length))
+temp_class<-temp_class%>%separate(WT, into = c("class", "bal"),sep =  " ")
+temp_class <- temp_class %>% select(-bal)
+
+temp_class_gat <- temp_class %>% gather(rep, num, -one_of("class"))
+
+temp_class_gat_sum <-
+    temp_class_gat%>%
+    group_by(rep) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%
+     group_by(rep,class)%>%
+    dplyr::summarise(Per =sum(sumper)*100)
+
+
+class_spread <- spread(temp_class_gat_sum, class, Per)
+
+class_spread <- as.data.frame(class_spread)
+rownames(class_spread) <- class_spread$rep
+class_spread <- select(class_spread, -rep)
+
+
+
+class.rep <- rownames(class_spread)
+class.rep<-sub("^X","",class.rep)
+class.rep<-sub("\\d{1}$","",class.rep)
+class.rep<-sub("\\.$","",class.rep) #remomve dot at the end
+
+#db_spread <- select(db_spread, -c(rep))
+
+prin_comp_wttwmp <- prcomp(class_spread, scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, 
+              obs.scale = 1, 
+              var.scale = 1 ,
+              groups = class.rep,
+              ellipse = TRUE
+              #label = wt.rep
+)
+
+g <-g + geom_point(aes( colour=class.rep), size = 1) +
+  geom_text_repel(aes(label = class.rep, 
+                      col =class.rep),
+                      size = 2,
+                      segment.color = 'grey50')
+g <-g + theme_bw()+  
+        theme( legend.position = "none") 
+
+g
+ #ggsave(file="pca_class-elipse.eps")
+
+```
+
+pca for each class
+
+```{r}
+byclass<-wt 
+
+byclass<-byclass%>%separate(WT, into = c("class", "bal"),sep =  " ")
+byclass <- byclass %>% select(-bal)
+
+cond1 <-  byclass$class == "DIP"
+byclass <- byclass[!cond1,]
+cond2 <- byclass$class == "mDIP"
+byclass <- byclass[!cond2,]
+cond3 <- byclass$class == "CL"
+byclass <- byclass[!cond3,]
+
+
+
+byclass_db <- select(byclass, -c( length))
+byclass_db$class_db <- paste(byclass_db$class, byclass_db$DB, sep="_")
+
+byclass_len <- select(byclass, -c( DB))
+byclass_len$class_len <- paste(byclass_len$class, byclass_len$length, sep="_")
+
+```
+
+
+PCA for PC - DB
+``` {r}
+pc <- filter(byclass_db, class == "PC" )
+pc_db <- select(pc, -c(class, DB))
+byclass_gat <- pc_db %>% gather(rep, num, -one_of("class_db"))
+
+byclass_gat_sum <-
+    byclass_gat%>%
+    group_by(rep) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%
+  group_by(rep,class_db)%>%
+    dplyr::summarise(Per =sum(sumper)*100)
+
+class_spread <- spread(byclass_gat_sum, class_db, Per)
+
+class_spread <- as.data.frame(class_spread)
+rownames(class_spread) <- class_spread$rep
+class_spread <- select(class_spread, -rep)
+
+
+
+class.rep <- rownames(class_spread)
+class.rep<-sub("^X","",class.rep)
+class.rep<-sub("\\d{1}$","",class.rep)
+class.rep<-sub("\\.$","",class.rep) #remomve dot at the end
+
+#db_spread <- select(db_spread, -c(rep))
+
+prin_comp_wttwmp <- prcomp(class_spread, scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, 
+              obs.scale = 1, 
+              var.scale = 1 ,
+              groups = class.rep,
+              #label = wt.rep
+)
+
+g <-g + geom_point(aes( colour=class.rep), size = 1) +
+  geom_text_repel(aes(label = class.rep, 
+                      col =class.rep),
+                      size = 2,
+                      segment.color = 'grey50')
+g <-g + theme_bw()+  
+        theme( legend.position = "none") +
+        xlim(-6, 3) +
+        ylim(-2,3)
+
+g
+ #ggsave(file="pca_pc-db.eps")
+```
+
+PCA for PC -LENGTH
+``` {r}
+pc_len <- filter(byclass_len, class == "PC" )
+pc_len <- select(pc_len, -c(class, length))
+byclass_gat <- pc_len %>% gather(rep, num, -one_of("class_len"))
+
+byclass_gat_sum <-
+    byclass_gat%>%
+    group_by(rep) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%
+  group_by(rep,class_len)%>%
+    dplyr::summarise(Per =sum(sumper)*100)
+
+class_spread <- spread(byclass_gat_sum, class_len, Per)
+
+class_spread <- as.data.frame(class_spread)
+rownames(class_spread) <- class_spread$rep
+class_spread <- select(class_spread, -rep)
+
+
+
+class.rep <- rownames(class_spread)
+class.rep<-sub("^X","",class.rep)
+class.rep<-sub("\\d{1}$","",class.rep)
+class.rep<-sub("\\.$","",class.rep) #remomve dot at the end
+
+#db_spread <- select(db_spread, -c(rep))
+
+prin_comp_wttwmp <- prcomp(class_spread, scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, 
+              obs.scale = 1, 
+              var.scale = 1 ,
+              groups = class.rep,
+              #label = wt.rep
+)
+
+g <-g + geom_point(aes( colour=class.rep), size = 1) +
+  geom_text_repel(aes(label = class.rep, 
+                      col =class.rep),
+                      size = 2,
+                      segment.color = 'grey50')
+g <-g + theme_bw()+  
+        theme( legend.position = "none") +
+        xlim(-3, 6) +
+        ylim(-2,3)
+
+g
+ #ggsave(file="pca_pc-len.eps")
+```
+
+PCA for PE - DB
+``` {r}
+pe <- filter(byclass_db, class == "PE" )
+pe_db <- select(pe, -c(class, DB))
+byclass_gat <- pe_db %>% gather(rep, num, -one_of("class_db"))
+
+byclass_gat_sum <-
+    byclass_gat%>%
+    group_by(rep) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%
+  group_by(rep,class_db)%>%
+    dplyr::summarise(Per =sum(sumper)*100)
+
+class_spread <- spread(byclass_gat_sum, class_db, Per)
+
+class_spread <- as.data.frame(class_spread)
+rownames(class_spread) <- class_spread$rep
+class_spread <- select(class_spread, -rep)
+
+
+
+class.rep <- rownames(class_spread)
+class.rep<-sub("^X","",class.rep)
+class.rep<-sub("\\d{1}$","",class.rep)
+class.rep<-sub("\\.$","",class.rep) #remomve dot at the end
+
+#db_spread <- select(db_spread, -c(rep))
+
+prin_comp_wttwmp <- prcomp(class_spread, scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, 
+              obs.scale = 1, 
+              var.scale = 1 ,
+              groups = class.rep,
+              #label = wt.rep
+)
+
+g <-g + geom_point(aes( colour=class.rep), size = 1) +
+  geom_text_repel(aes(label = class.rep, 
+                      col =class.rep),
+                      size = 2,
+                      segment.color = 'grey50')
+g <-g + theme_bw()+  
+        theme( legend.position = "none") +
+        xlim(-6, 3) +
+        ylim(-2,3)
+
+g
+ #ggsave(file="pca_pe-db.eps")
+```
+PCA for PE -LENGTH
+``` {r}
+pe_len <- filter(byclass_len, class == "PE" )
+pe_len <- select(pe_len, -c(class, length))
+byclass_gat <- pe_len %>% gather(rep, num, -one_of("class_len"))
+
+byclass_gat_sum <-
+    byclass_gat%>%
+    group_by(rep) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%
+  group_by(rep,class_len)%>%
+    dplyr::summarise(Per =sum(sumper)*100)
+
+class_spread <- spread(byclass_gat_sum, class_len, Per)
+
+class_spread <- as.data.frame(class_spread)
+rownames(class_spread) <- class_spread$rep
+class_spread <- select(class_spread, -rep)
+
+
+
+class.rep <- rownames(class_spread)
+class.rep<-sub("^X","",class.rep)
+class.rep<-sub("\\d{1}$","",class.rep)
+class.rep<-sub("\\.$","",class.rep) #remomve dot at the end
+
+#db_spread <- select(db_spread, -c(rep))
+
+prin_comp_wttwmp <- prcomp(class_spread, scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, 
+              obs.scale = 1, 
+              var.scale = 1 ,
+              groups = class.rep,
+              #label = wt.rep
+)
+
+g <-g + geom_point(aes( colour=class.rep), size = 1) +
+  geom_text_repel(aes(label = class.rep, 
+                      col =class.rep),
+                      size = 2,
+                      segment.color = 'grey50')
+g <-g + theme_bw()+  
+        theme( legend.position = "none") +
+        xlim(-3, 6) +
+        ylim(-2,3)
+
+g
+ #ggsave(file="pca_pe-len.eps")
+```
+PCA for PG - DB
+``` {r}
+pg <- filter(byclass_db, class == "PG" )
+pg_db <- select(pg, -c(class, DB))
+byclass_gat <- pg_db %>% gather(rep, num, -one_of("class_db"))
+
+byclass_gat_sum <-
+    byclass_gat%>%
+    group_by(rep) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%
+  group_by(rep,class_db)%>%
+    dplyr::summarise(Per =sum(sumper)*100)
+
+class_spread <- spread(byclass_gat_sum, class_db, Per)
+
+class_spread <- as.data.frame(class_spread)
+rownames(class_spread) <- class_spread$rep
+class_spread <- select(class_spread, -rep)
+
+
+
+class.rep <- rownames(class_spread)
+class.rep<-sub("^X","",class.rep)
+class.rep<-sub("\\d{1}$","",class.rep)
+class.rep<-sub("\\.$","",class.rep) #remomve dot at the end
+
+#db_spread <- select(db_spread, -c(rep))
+
+prin_comp_wttwmp <- prcomp(class_spread, scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, 
+              obs.scale = 1, 
+              var.scale = 1 ,
+              groups = class.rep,
+              #label = wt.rep
+)
+
+g <-g + geom_point(aes( colour=class.rep), size = 1) +
+  geom_text_repel(aes(label = class.rep, 
+                      col =class.rep),
+                      size = 2,
+                      segment.color = 'grey50')
+g <-g + theme_bw()+  
+        theme( legend.position = "none") +
+        xlim(-6, 3) +
+        ylim(-2,3)
+
+g
+#ggsave(file="pca_pg-db.eps")
+```
+
+PCA for PG -LENGTH
+``` {r}
+pg_len <- filter(byclass_len, class == "PG" )
+pg_len <- select(pg_len, -c(class, length))
+byclass_gat <- pg_len %>% gather(rep, num, -one_of("class_len"))
+
+byclass_gat_sum <-
+    byclass_gat%>%
+    group_by(rep) %>%                     
+    dplyr::mutate(sumper=num/sum(num))%>%
+  group_by(rep,class_len)%>%
+    dplyr::summarise(Per =sum(sumper)*100)
+
+class_spread <- spread(byclass_gat_sum, class_len, Per)
+
+class_spread <- as.data.frame(class_spread)
+rownames(class_spread) <- class_spread$rep
+class_spread <- select(class_spread, -rep)
+
+
+
+class.rep <- rownames(class_spread)
+class.rep<-sub("^X","",class.rep)
+class.rep<-sub("\\d{1}$","",class.rep)
+class.rep<-sub("\\.$","",class.rep) #remomve dot at the end
+
+#db_spread <- select(db_spread, -c(rep))
+
+prin_comp_wttwmp <- prcomp(class_spread, scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, 
+              obs.scale = 1, 
+              var.scale = 1 ,
+              groups = class.rep,
+              #label = wt.rep
+)
+
+g <-g + geom_point(aes( colour=class.rep), size = 1) +
+  geom_text_repel(aes(label = class.rep, 
+                      col =class.rep),
+                      size = 2,
+                      segment.color = 'grey50')
+g <-g + theme_bw()+  
+        theme( legend.position = "none") +
+        xlim(-3, 6) +
+        ylim(-2,3)
+
+g
+ #ggsave(file="pca_pg-len.eps")
+```
+
+
+Gif with mean data
+```{r}
+library(gapminder)
+library(ggplot2)
+theme_set(theme_bw())
+
+mean_wt <- wt
+
+
+mean_wt <- mean_wt %>% 
+  select(starts_with("TX 0.1")) %>%
+  rowwise() %>% 
+  do(data.frame(TX0.1 = mean(unlist(.)))) %>% 
+  bind_cols(mean_wt, .)
+
+mean_wt <- mean_wt %>% 
+  select(starts_with("TX 5")) %>%
+  rowwise() %>% 
+  do(data.frame(TX5 = mean(unlist(.)))) %>% 
+  bind_cols(mean_wt, .)
+
+mean_wt <- mean_wt %>% 
+  select(starts_with("TX 1")) %>%
+  rowwise() %>% 
+  do(data.frame(TX1 = mean(unlist(.)))) %>% 
+  bind_cols(mean_wt, .)
+
+mean_wt <- mean_wt %>% 
+  select(starts_with("early")) %>%
+  rowwise() %>% 
+  do(data.frame(early = mean(unlist(.)))) %>% 
+  bind_cols(mean_wt, .)
+mean_wt <- mean_wt %>% 
+  select(starts_with("mid")) %>%
+  rowwise() %>% 
+  do(data.frame(mid = mean(unlist(.)))) %>% 
+  bind_cols(mean_wt, .)
+mean_wt <- mean_wt %>% 
+  select(starts_with("stat")) %>%
+  rowwise() %>% 
+  do(data.frame(stat = mean(unlist(.)))) %>% 
+  bind_cols(mean_wt, .)
+mean_wt <- mean_wt %>% 
+  select(starts_with("late")) %>%
+  rowwise() %>% 
+  do(data.frame(late = mean(unlist(.)))) %>% 
+  bind_cols(mean_wt, .)
+
+mean_wt <- mean_wt %>% 
+  select(starts_with("4C")) %>%
+  rowwise() %>% 
+  do(data.frame(temp4C = mean(unlist(.)))) %>% 
+  bind_cols(mean_wt, .)
+mean_wt <- mean_wt %>% 
+  select(starts_with("13C")) %>%
+  rowwise() %>% 
+  do(data.frame(temp13C = mean(unlist(.)))) %>% 
+  bind_cols(mean_wt, .)
+mean_wt <- mean_wt %>% 
+  select(starts_with("20C")) %>%
+  rowwise() %>% 
+  do(data.frame(temp20C = mean(unlist(.)))) %>% 
+  bind_cols(mean_wt, .)
+mean_wt <- mean_wt %>% 
+  select(starts_with("30C")) %>%
+  rowwise() %>% 
+  do(data.frame(temp30C = mean(unlist(.)))) %>% 
+  bind_cols(mean_wt, .)
+
+mean_wt <- mean_wt %>% 
+  select(starts_with("NaCl 0.1")) %>%
+  rowwise() %>% 
+  do(data.frame(NaCl0.1 = mean(unlist(.)))) %>% 
+  bind_cols(mean_wt, .)
+mean_wt <- mean_wt %>% 
+  select(starts_with("NaCl 0.2")) %>%
+  rowwise() %>% 
+  do(data.frame(NaCl0.2 = mean(unlist(.)))) %>% 
+  bind_cols(mean_wt, .)
+mean_wt <- mean_wt %>% 
+  select(starts_with("NaCl 0.05")) %>%
+  rowwise() %>% 
+  do(data.frame(NaCl0.05 = mean(unlist(.)))) %>% 
+  bind_cols(mean_wt, .)
+
+mean_wt <- mean_wt %>% 
+  select(starts_with("MetOH 0.1")) %>%
+  rowwise() %>% 
+  do(data.frame(MetOH0.1 = mean(unlist(.)))) %>% 
+  bind_cols(mean_wt, .)
+mean_wt <- mean_wt %>% 
+  select(starts_with("MetOH 1")) %>%
+  rowwise() %>% 
+  do(data.frame(MetOH1 = mean(unlist(.)))) %>% 
+  bind_cols(mean_wt, .)
+
+mean_con <- mean_wt[, c(1,50:65)]
+mean_con_gat <- gather(mean_con, rep, num, -one_of("WT"))
+
+p <- ggplot(mean_con_gat, aes(x = WT, y = num, frame = rep)) +
+  geom_point() +
+  coord_flip()
+
+
+library(gganimate)
+
+gganimate(p)
+```
+
+```{r}
+
+only_WT <- select(wt, -c(DB, length))
+WT_gather <- gather(only_WT, rep, num, -one_of("WT"))
+
+WT_gather$rep<-sub("\\d{1}$","",WT_gather$rep)
+WT_gather$rep<-sub("\\.$","",WT_gather$rep) #remomve dot at the end
+
+
+
+
+WT_gather$WT <- factor(WT_gather$WT, levels = c("DIP" ,"mDIP", "CL [64:0]" ,"CL [68:2]", "CL [68:4]", "CL [70:4]" ,"CL [72:2]", "PC [32:1]", "PC [32:2]", "PC [34:1]" ,"PC [34:2]" ,"PC [34:3]", "PC [34:4]", "PC [36:2]" ,"PC [36:3]" ,"PC [36:4]", "PE [32:1]", "PE [34:1]", "PE [34:2]", "PE [36:1]" ,"PE [36:2]", "PE [36:3]","PG [32:1]" ,"PG [34:1]", "PG [34:2]", "PG [36:2]", "PG [36:3]" ))
+
+WT_gather$rep <- factor(WT_gather$rep, levels = c("4C ","13C ", "20C ", "30C ", "early", "mid","late",  "stat" ,"NaCl 0.05 ", "NaCl 0.1 ", "NaCl 0.2 ", "MetOH 0.1 ","MetOH 1 ","TX 0.1 ", "TX 1 ","TX 5 " ) , labels = c("Temperature: 4C","Temperature: 13C", "Temperature: 20C", "Temperature: 30C", "Growth stage: Early", "Growth stage: Middle","Growth stage: Late",  "Growth stage: Stationary" ,"Salt: NaCl 0.05", "Salt: NaCl 0.1", "Salt: NaCl 0.2", "Methanol: MetOH 0.1","Methanol: MetOH 1","Detergent: TX 0.1", "Detergent: TX 1","Detergent: TX 5" ))
+
+q <- ggplot(WT_gather, aes(x = WT, y = num, frame = rep)) +
+  geom_point() +
+  labs( x= "Lipid", y = "Percet Abundance [mol %]" ) +
+  coord_flip() +
+  theme(axis.text.x=element_text(size = 7, angle= 40,hjust=1))
+  
+
+
+gganimate(q, "all_lipids.gif")
+
+```
+
+```{r}
+gat_pca <- gather(wt, rep, num, -one_of("WT", "DB", "length") )
+    gat_pca <- select(gat_pca,-c(2,3))
+    
+    gat_spread <- spread(gat_pca, WT, num)
+   
+    gat_spread$rep <- make.names(gat_spread$rep, unique=TRUE)
+    rownames(gat_spread) <- gat_spread$rep
+    gat_spread <- select(gat_spread,-rep)
+    
+    
+    rep <- rownames(gat_spread)
+    rep<-sub("^X","",rep)
+    rep<-sub("\\d{1}$","",rep)
+    rep<-sub("\\.$","",rep) #remomve dot at the end
+ 
+    prin_comp_wttwmp <- prcomp(gat_spread)
+  
+    ggbiplot(prin_comp_wttwmp, 
+                  obs.scale = 1, 
+                  var.scale = 1,
+                  groups = wt.rep ,
+                  var.axes = FALSE,
+                  ellipse = FALSE
+                  #label = wt.rep
+    ) + 
+      geom_point(aes( colour=wt.rep), size = 1) +
+      geom_text_repel(aes(label = wt.rep, 
+                          col =wt.rep),
+                      size = 2,
+                      segment.color = 'grey50')+ 
+      theme_bw()+  
+      theme( legend.position = "none")
+```
+

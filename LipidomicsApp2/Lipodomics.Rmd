@@ -1,0 +1,4581 @@
+---
+title: "Lipidomic data"
+output:
+  html_notebook: default
+  html_document: default
+  pdf_document: default
+---
+
+```{r}
+require(gdata)
+library(ggplot2)
+library(reshape)
+library(dplyr)
+library (plyr)
+library(stringr)
+library(tidyr)
+library(ggbiplot)
+library(ggrepel)
+```
+Load the data
+
+```{r}
+wt = read.xls("Desktop/Lipidomic/Mext_Lipidome_Feb2017.xlsx", sheet = 1, header = TRUE)
+wt["type"] <- "wt"
+colnames(wt)[which(names(wt) == "WT")] <- "lipids"
+shc = read.xls("Desktop/Lipidomic/Mext_Lipidome_Feb2017.xlsx", sheet = 2, header = TRUE)
+shc["type"] <- "shc"
+colnames(shc)[which(names(shc) == "SHC")] <- "lipids"
+
+```
+Summary of the data
+
+```{r}
+summary(wt)
+summary(shc)
+all <- bind_rows(wt, shc) #marge two df
+
+```
+
+Remove nan 
+```{r}
+all[is.na(all)] <- 0
+all <- all[-27, ] 
+mdata <- melt(all, id=c("type","lipids"))
+mdata$value=as.numeric(mdata$value)
+mdata[is.na(mdata)] <- 0
+mdata$variable <- sub("\\d{1}$","",mdata$variable ) #delete last digit at the end
+
+
+```
+
+Plot all conditions for CL [70:4]
+
+```{r}
+pc<- mdata[ which(mdata$lipids=='CL [70:4]'),]
+pc_plot <- pc[pc$variable!='DB' & pc$variable!='type'& pc$variable!='length', ]
+
+ggplot(pc_plot, aes(x = pc_plot$variable, y=pc_plot$value, col = pc_plot$type)) + geom_point() 
+
+```
+
+
+
+Plot all lipids for early stage condition
+```{r}
+early<- mdata[ which(mdata$variable=='early'),]
+early_plot <- early[early$variable!='DB' & early$variable!='type'& early$variable!='length', ]
+
+ggplot(early_plot, aes(x = early_plot$lipids, y=early_plot$value, col = early_plot$type)) + geom_point() + coord_flip()
+
+```
+
+```{r}
+
+#plot only wt
+wt<- mdata[ which(mdata$type=='wt'),]
+wt <- wt[wt$variable!='DB' & wt$variable!='type'& wt$variable!='length', ]
+p1 <- ggplot(wt, aes(x = wt$variable, y=wt$value, col = wt$lipids)) + geom_point() + coord_flip()
+
+#plot only for shc
+shc<- mdata[ which(mdata$type=='shc'),]
+shc <- shc[shc$variable!='DB' & shc$variable!='type'& shc$variable!='length', ]
+p2<-ggplot(shc, aes(x = shc$variable, y=shc$value, col = shc$lipids)) + geom_point() + coord_flip()
+
+mdata_plot <- mdata[mdata$variable!='DB' & mdata$variable!='type'& mdata$variable!='length', ]
+ggplot(mdata_plot, aes(x = variable, y=value, col = lipids))+ geom_point() +coord_flip() + facet_grid(type~ .)
+
+```
+
+wt_shc_aligned
+```{r}
+wt_sh_aligned <- read.xls("Desktop/Lipidomic/Mext_Lipidome_Feb2017.xlsx", sheet = 3, header = TRUE)
+summary(wt_sh_aligned)
+wt_sh_aligned[is.na(wt_sh_aligned)] <- 0
+aligned <- melt(wt_sh_aligned, id=c("type","lipids"))
+
+```
+ 
+ 
+```{r}
+require(tidyr)
+algn_gather = gather(wt_sh_aligned, replicate, membr_perc, -one_of("type", "lipids", "length", "DB")) %>% tbl_df
+
+#algn_gather %>% filter() %>% mutate()
+aligned$value=as.numeric(aligned$value)
+aligned[is.na(aligned)] <- 0
+aligned$variable <- sub("\\d{1}$","",aligned$variable ) #delete last digit at the end
+aligned_plot <- aligned[aligned$variable!='DB' & aligned$variable!='type'& aligned$variable!='length', ]
+
+
+aligned_plot[ which(aligned_plot$type=='wt'),]
+
+ggplot(aligned_plot, aes(x = variable, y=value, col = lipids))  +
+  geom_point() + 
+  coord_flip() + 
+  facet_grid(type~ ., scales = "free_y") 
+#+ ylim(0, 10)
+
+```
+
+
+```{r}
+library(gplots)
+library(reshape)
+library(ggplot2)
+
+
+
+raw_WT<-read.csv(file='Desktop/lipids_WT.csv',sep=';')
+raw_SHC<-read.csv(file='Desktop/lipids_SHC.csv',sep=';')
+names(raw_WT)
+#merge data into a data frame with columns: WT, length, DB, growth, value
+wt_growth=melt(raw_WT[,1:15], id=c("WT","length","DB"))
+names(wt_growth)[4]<-"growth"
+
+#Add the type column with values: CL, PC, PE, PG
+wt_growth<-data.frame(type=substr(wt_growth$WT,1,2), wt_growth)
+#remove repetition number so that repetitions are not recognizible
+wt_growth$growth<-sub("[0-9]","",wt_growth$growth)
+wt_growth$growth<-factor(wt_growth$growth,levels=c("early","mid","late","stat"))
+wt_growth$value <- gsub(",",".",wt_growth$value)
+wt_growth$value <- as.numeric(as.character(wt_growth$value))
+
+#Use ggplot2 to get  " value = f (growth stage)" plots separately for each lipid type and DB numer. 
+#Sizes of points are proportional to lipid length.  
+
+
+fig1<-ggplot(data=wt_growth,aes(x=growth,y=value,size=length,color=DB))+
+  geom_point()+
+  facet_grid(facets="type ~ DB", scales="free")
+plot(fig1)
+
+fig2<-ggplot(data=wt_growth,aes(x=growth,y=value,color=factor(length)))+
+  geom_point()+
+  facet_grid(facets="type ~ DB", scales="free")
+plot(fig2)
+
+lm.growth<-lm(data=wt_growth,value~.)
+
+```
+
+
+
+```{r}
+
+require(dplyr)
+##count how many point in data set
+glimpse(aligned_plot)
+dplyr::count(aligned_plot, variable, type) %>% View
+## plot for all early PC CLASS
+require(tidyr)
+separate_lipids <- algn_gather %>% separate(lipids,  into= c("name", "para"), sep = " ") %>% 
+  filter(name == "PC") 
+separate_lipids$replicate <- sub("\\d{1}$","",separate_lipids$replicate )
+pc<-separate_lipids %>% filter(str_detect(replicate,paste(c("early", "mid", "late"))))
+
+ggplot(pc, aes(x = DB, y= membr_perc, col = length, shape = replicate,
+               group=interaction(length, replicate))) +
+  geom_point() + 
+  geom_jitter() +
+  facet_grid(type~ ., scales = "free_y") 
+
+early_pc$replicate <- factor(early_pc$replicate, c('early', 'mid', 'late'))
+
+ggplot(early_pc, aes(x = replicate, y = membr_perc, fill = type)) + 
+  geom_jitter(size = 3, shape = 21, width = 0.2, alpha = 0.7) +
+  facet_grid(~DB)
+### group the data to plot for each db few replicates
+```
+
+
+
+
+```{r}
+library(gplots)
+library(reshape)
+library(ggplot2)
+
+
+
+raw_WT<-read.csv(file='Desktop/lipids_WT.csv',sep=';')
+raw_SHC<-read.csv(file='Desktop/lipids_SHC.csv',sep=';')
+names(raw_WT)
+#merge data into a data frame with columns: WT, length, DB, growth, value
+wt_growth=melt(raw_WT[,1:15], id=c("WT","length","DB"))
+names(wt_growth)[4]<-"growth"
+
+#Add the type column with values: CL, PC, PE, PG
+wt_growth<-data.frame(type=substr(wt_growth$WT,1,2), wt_growth)
+#remove repetition number so that repetitions are not recognizible
+wt_growth$growth<-sub("[0-9]","",wt_growth$growth)
+wt_growth$growth<-factor(wt_growth$growth,levels=c("early","mid","late","stat"))
+
+#Use ggplot2 to get  " value = f (growth stage)" plots separately for each lipid type and DB numer. 
+#Sizes of points are proportional to lipid length.  
+
+
+fig1<-ggplot(data=wt_growth,aes(x=growth,y=value,size=length,color=DB))+
+  geom_point()+
+  geom_jitter()+
+  facet_grid(facets="type ~ DB")
+plot(fig1)
+
+fig2<-ggplot(data=wt_growth,aes(x=growth,y=value,color=factor(length)))+
+  geom_point()+
+  geom_jitter()+
+  facet_grid(facets="type ~ DB")
+plot(fig2)
+
+lm.growth<-lm(data=wt_growth,value~.)
+
+
+```
+
+
+
+
+Standard: ph = 7, temp = 30 degree
+
+Methods:  ????
+
+1) Wilcoxon-Mann-Whitney-Test
+2) Two-way ANOVA
+3) Three-way ANOVA
+4) for pH and temp. - linear models
+
+***PCA***
+Analiza czynnikowa - Kiedy stosowac?
+* Analiza eksploracyjna
+czynniki s?? pocz??tkowo nieznane i zostaj??
+wyodr??bnione dzi??ki analizie: dane grupowane s??
+w zbiory zmiennych najsilniej ze sob??
+skorelowanych ??? wykrywanie zwi??zk??w mi??dzy
+zmiennymi bez wst??pnych za??o??e??
+*Analiza konfirmacyjna ??? weryfikacja hipotez co
+do okre??lonej z g??ry struktury czynnik??w i
+estymacja parametr??w za??o??onego modelu
+http://www.nature.com/nbt/journal/v26/n3/full/nbt0308-303.html
+
+ The idea is that often you have multiple quantitative variables and sometimes they'll be highly correlated with each other. In other words, they'll be very similar to being the almost the exact same variable. In this case, it's not necessarily useful to include every variable in the model. You might want to include some summary that captures most of the information in those quantitative variables
+Benefits:
+- reduced number of predictors 
+- reduced noise (due to averaging)
+
+The procedure includes 5 simple steps :
+
+Prepare the data :
+Center the data : subtract the mean from each variables. This produces a data set whose mean is zero.
+Scale the data : If the variances of the variables in your data are significantly different, it???s a good idea to scale the data to unit variance. This is achieved by dividing each variables by its standard deviation.
+Calculate the covariance/correlation matrix
+Calculate the eigenvectors and the eigenvalues of the covariance matrix
+Choose principal components : eigenvectors are ordered by eigenvalues from the highest to the lowest. The number of chosen eigenvectors will be the number of dimensions of the new data set. eigenvectors = (eig_1, eig_2,???, eig_n)
+compute the new dataset :
+transpose eigeinvectors : rows are eigenvectors
+transpose the adjusted data (rows are variables and columns are individuals)
+new.data = eigenvectors.transposed X adjustedData.transposed
+
+***PC-corr*** -  need to be more features than samples, because whan you apply PCA we squareform teh data matrix to the length of the samples, soe we "compress" the features in the same length of the samples - from that we apply certain correlation  - obtain the network of features
+
+You tend to use the covariance matrix when the variable scales are similar and the correlation matrix when variables are on different scales.
+-> if the scales are similar use cov-PCA,
+
+
+A covariance matrix contains the covariances between all possible pairs of variables in the data set :
+
+
+
+PLAY WITH A MATRIX
+```{r}
+data<- wt_sh_aligned
+data[is.na(data)] <- 0
+#change WT to 0 shc to 1
+data$type <-revalue(data$type, c("WT"="0"))
+data$type <-revalue(data$type, c("SHC"="1"))
+
+
+data$lipids <- as.character(wt_sh_aligned$lipids)
+wt_sh_aligned_t  <- t(data) #transpose the table
+rownames(wt_sh_aligned_t)<-gsub("\\d{1}$","",rownames(wt_sh_aligned_t)) #delete last digit
+rownames(wt_sh_aligned_t)<-gsub("\\.$","",rownames(wt_sh_aligned_t)) #delete dot at the end of teh string
+#set a second row as a header
+colnames(wt_sh_aligned_t) <- wt_sh_aligned_t[2,]
+wt_sh_aligned_t <- wt_sh_aligned_t[-2,]
+
+wt_sh_aligned_t<-apply(wt_sh_aligned_t, 1,as.numeric) #convert matrix to  numeric
+is.numeric(wt_sh_aligned_t)
+str(wt_sh_aligned_t)
+
+res.cov <- cov(wt_sh_aligned_t)
+round(res.cov,2)
+
+
+
+
+#library(GGally)
+
+#pc <- wt[1:13,1:15] %>%
+#    select( -DB, -length)
+#pc
+#ggpairs(pc)
+
+library(corrr)
+
+corr_wt =  wt %>% select(-DB, -length, -WT)  %>%
+    corrr::correlate(use="pairwise.complete.obs",method="spearman")
+    # corrr::correlate()
+
+corr_wt %>% network_plot(min_cor = .7, legend = TRUE)
+#The good news is that it is possible to change this magnitude with the min_cor argument. This argument, which is set to .30 by default, determines the minimum correlation (in absolute terms) to plot as a path. 
+```
+Each path represents a correlation between the two variables that it joins. A blue path represents a positive correlation, and a red path represents a negative correlation. The width and transparency of the line represent the strength of the correlation (wider and less transparent = stronger correlation). 
+```{r}
+corr_wt %>% rearrange() %>% fashion()
+```
+
+
+
+```{r}
+corr_wt %>% rearrange() %>% rplot(legend = TRUE) + 
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))
+# the strongest correlations are closest to the diagonal, while the weakest are further away. This is the main purpose of rearrange(), which helps to find variable clusters and so on.
+
+```
+
+To increase the cardinality_threshold parameter ggpairs:
+ggduo(wt, cardinality_threshold = NULL)
+
+cardinality_threshold
+maximum number of levels allowed in a charcter / factor column. Set this value
+to NULL to not check factor columns. Defaults to 15
+https://tgmstat.wordpress.com/2013/11/28/computing-and-visualizing-pca-in-r/
+
+Is it neccesary to do log of the data??
+
+
+PCA reduces the dimensionality of data containing a large set of variables. This is achieved by transforming the initial variables into a new small set of variables without loosing the most important information in the original data set.
+
+These new variables corresponds to a linear combination of the originals and are called principal components.
+
+The main goals of principal component analysis is :
+
+to identify hidden pattern in a data set
+to reduce the dimensionnality of the data by removing the noise and redundancy in the data
+to identify correlated variables
+
+
+```{r}
+df<- wt_sh_aligned
+df[is.na(df)] <- 0
+ncol(df)
+# log transform 
+log.df <- log1p(df[, 5:46]) #log1p(x) computes log(1+x) accurately also for |x| << 1 (and less accurately when x is approximately -1). - http://stackoverflow.com/questions/40827096/error-in-svdx-nu-0-infinite-or-missing-values-in-x-checked-no-negative
+data <- df[, 5:46]
+df.lipids <- as.character(df[, 2])
+df.types  <- as.character(df[, 1])
+
+# apply PCA - scale. = TRUE is highly 
+# advisable, but default is FALSE. 
+df.log.pca <- prcomp(log.df,
+                 center = TRUE,
+                 scale. = TRUE) 
+df.pca <- prcomp(data,
+                 center = TRUE,
+                 scale. = TRUE) 
+
+# print method
+print(df.log.pca)
+
+print(df.pca)
+
+# plot method
+plot(df.pca, type = "l")
+plot(df.log.pca, type = "l")
+
+
+# summary method
+summary(df.pca)
+summary(df.log.pca)
+
+
+#plot the data
+
+library(devtools)
+library(ggbiplot)
+g <- ggbiplot(df.pca, obs.scale = 1, var.scale = 1, 
+              groups = interaction(df.types), 
+              circle = TRUE, ellipse = T) +
+    theme_bw()
+g <- g + scale_color_discrete(name = '')
+g <- g + theme(legend.direction = 'horizontal', 
+               legend.position = 'top')
+print(g)
+
+```
+Circle reflects how well are teh variable described. if the arow stick to the circle it means that all the information regarding that variable is totally capture by this variability. You will not gain anything by choking out and look at it by itself because it will be exacly refecting the position of points at the circle
+tatally capture
+https://www.youtube.com/watch?v=EHb_kuw1GNU
+
+Wsp????rz??dne ko??ca wektora to odpowiadaj??ce im ??adunki czynnikowe zmiennych.
+- D??ugo???? wektora reprezentuje zas??b informacyjny zmiennej pierwotnej, jaki nios?? sk??adowe g????wne wyznaczaj??ce uk??ad wsp????rz??dnych. Im d??u??szy wektor, tym wk??ad zmiennej pierwotnej w budow?? sk??adowych wi??kszy. W przypadku analizy opartej na macierzy korelacji ??adunki s?? korelacjami pomi??dzy zmiennymi pierwotnymi a sk??adowymi, w??wczas punkty wpadaj?? do ko??a jednostkowego. Dzieje si?? tak dlatego, ??e wsp????czynnik korelacji nie mo??e przekroczy?? jedynki. W rezultacie, im dana zmienna pierwotna le??y bli??ej brzegu tego ko??a, tym lepsza jest jej reprezentacja przez przedstawione g????wne sk??adowe.
+- Znak wsp????rz??dnych ko??ca wektora czyli znak ??adunku czynnikowego - wskazuje na dodatni?? lub ujemn?? korelacj?? zmiennej pierwotnej i sk??adowych g????wnych tworz??cych uk??ad wsp????rz??dnych. Je??eli rozpatrujemy ????cznie obie osie (2 sk??adowe), w??wczas zmienne pierwotne mog?? by?? kwalifikowane do jednej z czterech kategorii, zale??nie od kombinacji znak??w (+/-) ich ??adunk??w czynnikowych.
+- K??t mi??dzy wektorami wskazuje na skorelowanie zmiennych pierwotnych:
+0 < ?? < 900: im k??t pomi??dzy wektorami reprezentuj??cymi zmienne pierwotne jest mniejszy tym silniejsza jest dodatnia korelacja pomi??dzy tymi zmiennymi.
+?? = 900 - wektory te s?? prostopad??e, czyli zmienne pierwotne nie s?? skorelowane.
+900 < ?? < 1800: im k??t pomi??dzy wektorami reprezentuj??cymi zmienne pierwotne jest wi??kszy, tym silniejsza jest ujemna korelacja pomi??dzy tymi zmiennymi.
+ http://www.statystyka.az.pl/analiza-skladowych-glownych-pca.php
+ http://pqstat.pl/?mod_f=test_pca
+ PCA tries to project your data onto a new set of dimensions where the variances in your data are captured such that you can classify/cluster them visually or by using a hopefully simple algorithm.
+
+The variance plot tells you how much the new set of dimensions capture variances in decreasing order. Biplot is the projection of your data on the first two principal components (where the variances are the highest).
+
+It is common for the "species" scores in a PCA to be drawn as biplot arrows that point in the direction of increasing values for that variable.
+
+Standarize data: data point substrate mean of all data:  x - mean(x) - different axes - data the same (if more/mixed units then as well divad by sd)
+
+https://www.youtube.com/watch?v=oZ2nfIPdvjY
+Test for grwth stage
+```{r}
+df<- wt_sh_aligned
+df[is.na(df)] <- 0
+ncol(df)
+
+# log transform 
+log.growth <- log1p(df[, 5:16])
+growth.pca <- prcomp(log.growth,
+                 center = TRUE,
+                 scale. = TRUE)
+# print method
+print(growth.pca)
+# plot method
+plot(growth.pca, type = "l")
+
+library(devtools)
+install_github("ggbiplot", "vqv")
+ 
+library(ggbiplot)
+g <- ggbiplot(growth.pca, obs.scale = 1, var.scale = 1, 
+              groups = interaction(df.types), 
+              circle = TRUE)
+g <- g + scale_color_discrete(name = '')
+g <- g + theme(legend.direction = 'horizontal', 
+               legend.position = 'top')
+print(g)
+```
+
+ Wild Type
+ 
+ 
+```{r}
+
+wt = read.xls("Desktop/Lipidomic/Mext_Lipidome_Feb2017.xlsx", sheet = 1, header = TRUE)
+wt[is.na(wt)] <- 0
+ncol(wt)
+
+wt.lipids <- wt$WT
+wt <- subset(wt, select = -c(TX.1.3) ) #delete column TX.1.3
+
+# log transform 
+log.wt <- log1p(wt[, 5:62])
+wt.pca <- prcomp(log.wt,
+                 center = TRUE,
+                 scale. = TRUE)
+# print method
+print(wt.pca)
+# plot method
+plot(wt.pca, type = "l")
+
+
+library(ggbiplot)
+g <- ggbiplot(wt.pca, obs.scale = 1, var.scale = 1, 
+              groups = wt.lipids, 
+              circle = TRUE)
+g <- g + scale_color_discrete(name = '')
+g <- g + theme(legend.direction = 'horizontal', 
+               legend.position = 'top')
+print(g)
+```
+
+
+
+NAPRAW TO!
+https://www.r-bloggers.com/raccoon-ch-2-4-3-way-anova/
+http://www.quantide.com/wp-content/uploads/2017/02/Three-way-Anova-with-R.pdf
+```{r}
+wt_sel <-  wt %>% select(-DB, -length)
+
+op <- par(mfcol = c(1,3)) 
+plot.design(WT ~ early1, data = wt_sel, cex=0.5 )
+plot.design(WT ~ early2, data = wt_sel, cex=0.5)
+plot.design(WT ~ early3, data = wt_sel, cex=0.5)
+par(op)
+```
+
+
+```{r}
+require(tidyr)
+algn_gather = gather(wt_sh_aligned, replicate, membr_perc, -one_of("type", "lipids", "length", "DB")) %>% tbl_df
+str(algn_gather)
+#algn_gather %>% filter() %>% mutate()
+algn_gather[is.na(algn_gather)] <- 0
+#aligned$variable <- sub("\\d{1}$","",aligned$variable ) #delete last digit at the end
+#aligned_plot <- aligned[aligned$variable!='DB' & aligned$variable!='type'& aligned$variable!='length', ]
+algn_gather$replicate <- as.factor(algn_gather$replicate)
+
+```
+
+```{r}
+
+wt_algn <- algn_gather[ which(algn_gather$type=='WT'),]
+
+wt_algn <-  wt_algn %>% select( -type)
+
+wt_growthstage <- wt_algn[1:300, ]
+
+op <- par(mfcol =1:2)  
+plot.design(membr_perc ~ lipids, data = wt_growthstage, cex=0.4 )
+plot.design(membr_perc ~ replicate, data = wt_growthstage, cex=0.5 )
+par(op)
+  
+```
+```{r}
+with(wt_growthstage, {
+  interaction.plot(lipids, replicate, membr_perc)
+  }
+)
+```
+
+https://www.r-bloggers.com/repeated-measures-anova-in-r-exercises/
+
+```{r}
+str(algn_gather)
+
+
+
+plot.design(membr_perc ~ ., data =algn_gather)
+
+op <- par(mfrow = c(3, 1))
+with(algn_gather, {
+  interaction.plot(type, lipids, membr_perc)
+  interaction.plot(type, replicate, membr_perc)
+  interaction.plot(replicate, lipids, membr_perc)
+  }
+)
+par(op)
+
+
+```
+Inference and models of 3-way Anova
+```{r}
+fm <- aov(membr_perc ~ type + lipids + replicate, data = algn_gather)
+summary(fm)
+```
+
+```{r}
+qplot(replicate, membr_perc, fill=factor(type), data=algn_gather, geom="boxplot", position="dodge")+
+  theme_bw()
+```
+
+
+
+```{r}
+
+algn_gather$replicate <- sub("\\d{1}$","",algn_gather$replicate ) #delete last digit at the end
+graph_summary <- ddply(algn_gather, c("replicate"), summarize,
+                       AVERAGE=mean(membr_perc),
+                       SE=sqrt(var(membr_perc)/length(membr_perc)))
+
+ggplot(data = graph_summary, aes(x = replicate, y = AVERAGE, colour = replicate))+
+  geom_point()+
+  geom_errorbar(aes(ymax=AVERAGE+SE, ymin=AVERAGE-SE))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 0, size=11),
+       axis.title.x = element_text(size=14),
+       axis.title.y = element_text(angle = 90, size=14))+
+  scale_x_discrete("Replicate")+
+  scale_y_continuous("Membr per")
+```
+
+
+PCR - CENTER - GROUP BY TYPE
+
+pca not working with this data.
+
+mca is working
+
+
+***PCA only for WT***
+```{r}
+wt_pc<- wt
+
+ncol(wt_pc)
+wt.types <- wt_pc[,1]
+wt.types <- wt_pc[,1]
+# log transform 
+log.growth <- log1p(wt_pc[,4:62])
+growth.pca <- prcomp(log.growth,
+                 center = TRUE,
+                 scale. = TRUE)
+# print method
+print(growth.pca)
+
+# plot method
+plot(growth.pca, type = "l") #first PC explain most of the variability in the data
+summary(growth.pca)
+g <- ggbiplot(growth.pca, obs.scale = 1, var.scale = 1, 
+              groups = interaction(wt.types), 
+              circle = TRUE)
+g <- g + scale_color_discrete(name = '')
+g <- g + theme(legend.direction = 'horizontal', 
+               legend.position = 'top')
+print(g)
+```
+```{r}
+library(tidyr)
+wt_gather = gather(wt, WT, -one_of("length", "DB")) %>% tbl_df
+
+m1 <- t(wt) #transpose df
+colnames(m1) <- m1[1,] #first row as column name
+m1 <- m1[-1,]  #delete frist column
+typeof(m1)
+m1<-as.data.frame(m1) #change to df
+str(m1)
+
+m1[] <- lapply(m1, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(m1, class)
+```
+
+
+
+```{r}
+
+library(ggbiplot)
+
+
+str(wt_pc) 
+wt_pc <- m1[3:61,]
+
+prin_comp <- prcomp(wt_pc, scale. = T)
+names(prin_comp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp$center #outputs the mean of variables
+prin_comp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp$rotation
+
+plot(prin_comp, type = "l") #first PC explain most of the variability in the data
+
+wt.types <- rownames(wt_pc)
+g <- ggbiplot(prin_comp, obs.scale = 1, var.scale = 1, 
+              labels  = wt.types,
+              groups = wt.types,
+              circle = TRUE)
+g <- g + scale_color_discrete(name = '') 
+
+g <- g + theme(legend.position = "none")
+print(g)
+
+
+plot(prin_comp$x)
+
+```
+
+Variables reflected by arrows. The same direction = correlated variable.
+It is common for the "species" scores in a PCA to be drawn as biplot arrows that point in the direction of increasing values for that variable.
+
+
+
+WT/SHC
+
+```{r}
+#combine lipids and type column
+wt_shc = mutate(wt_sh_aligned,
+   concated_column = paste(lipids, type, sep = '_'))
+
+wt_shc_t <- t(wt_shc) #transpose df
+colnames(wt_shc_t) <- wt_shc_t[47,] #first row as column name
+wt_shc_t <- wt_shc_t[-47,]  #delete frist column
+
+typeof(wt_shc_t)
+wt_shc_t<-as.data.frame(wt_shc_t) #change to df
+
+str(wt_shc_t)
+
+wt_shc_t.types <- wt_shc_t[1,]
+wt_shc_t[] <- lapply(wt_shc_t, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(wt_shc_t, class)
+wt_shc_t[is.na(wt_shc_t)] <- 0
+```
+
+PCA WT/SHC
+```{r}
+df <- wt_shc_t
+df[is.na(df)] <- 0
+ncol(df)
+str(df)
+df <- df[5:45,]
+df.log.pca <- prcomp(df,
+                 scale. = TRUE) 
+
+# print method
+print(df.log.pca)
+
+
+# plot method
+plot(df.log.pca, type = "l")
+
+
+# summary method
+summary(df.log.pca)
+
+
+#plot the data
+
+library(ggbiplot)
+wtshc.types <- rownames(df)
+ggbiplot(df.log.pca, obs.scale = 1, var.scale = 1, 
+              labels  = wtshc.types,
+         groups = interaction(wt_shc_t.types),
+              circle = TRUE)
+wtshc<- ggbiplot(df.log.pca, obs.scale = 1, var.scale = 1, 
+              groups = interaction(wt_shc_t.types), 
+              circle = TRUE, ellipse = T) +
+    theme_bw()
+wtshc <-  wtshc+ scale_color_discrete(name = '')
+wtshc <- wtshc + theme(legend.direction = 'horizontal', 
+               legend.position = 'top')
+print(wtshc)
+```
+
+
+
+
+
+
+
+ONLY TEMPERATURE!
+
+
+```{r}
+library(gplots)
+library(reshape)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+
+raw_WT<-read.csv(file='Desktop/lipids_WT.csv',sep=';')
+raw_SHC<-read.csv(file='Desktop/lipids_SHC.csv',sep=';')
+names(raw_WT)
+#merge data into a data frame with columns: WT, length, DB, growth, value
+wt_temp <- raw_WT %>% select(WT, length, DB, starts_with("X")) %>%
+          gather( replicate, membr_perc, -one_of("WT", "length", "DB")) %>% tbl_df
+
+
+#Add the type column with values: CL, PC, PE, PG
+wt_temp<-data.frame(type=substr(wt_temp$WT,1,2), wt_temp)
+#remove repetition number so that repetitions are not recognizible
+wt_temp$replicate<-sub("\\d{1}$","",wt_temp$replicate)
+wt_temp$replicate<-sub("\\.$","",wt_temp$replicate) #remomve dot at the end
+wt_temp$replicate<-sub("X","",wt_temp$replicate) #remove X at the beginning
+
+wt_temp$replicate<-factor(wt_temp$replicate,levels=c("4C","13C","20C"))
+str(wt_temp)
+wt_temp[is.na(wt_temp)] <- 0 #make sure no missing values
+wt_temp$membr_perc <- gsub(",",".",wt_temp$membr_perc) #convert , to .
+wt_temp$membr_perc <- as.numeric(as.character(wt_temp$membr_perc))
+
+#Use ggplot2 to get  " value = f (growth stage)" plots separately for each lipid type and DB numer. 
+#Sizes of points are proportional to lipid length.  
+
+
+fig1<-ggplot(data=wt_temp,aes(x=replicate,y=membr_perc,size=length,color=DB))+
+  geom_point()+
+  facet_grid(facets="type ~ DB", scales="free")
+plot(fig1)
+
+fig2<-ggplot(data=wt_temp,aes(x=replicate,y=membr_perc,color=factor(length)))+
+  geom_point()+
+  facet_grid(facets="type ~ DB", scales="free")
+plot(fig2)
+
+lm.growth<-lm(data=wt_growth,value~.)
+```
+
+```{r}
+library(plotly)
+ggplotly(fig2)
+```
+
+
+
+```{r}
+#combine lipids and type column
+pca_wt_temp <- raw_WT
+pca_wt_temp$TX.1.3 <- gsub("na","0",pca_wt_temp$TX.1.3)
+
+#only temp
+pca_wt_temp <- pca_wt_temp %>% select(WT, length, DB, starts_with("X"), starts_with("early"), -X13C.1) %>%tbl_df
+
+
+pca_wt_temp <- t(pca_wt_temp) #transpose df
+colnames(pca_wt_temp) <- pca_wt_temp[1,] #first row as column name
+pca_wt_temp <- pca_wt_temp[-1,]  #delete frist column
+pca_wt_temp[is.na(pca_wt_temp)] <- 0
+
+
+str(pca_wt_temp)
+typeof(pca_wt_temp)
+pca_wt_temp<-as.data.frame(pca_wt_temp) #change to df
+
+str(pca_wt_temp)
+
+pca_wt_temp.types <- colnames(pca_wt_temp) 
+pca_wt_temp[] <- lapply(pca_wt_temp, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(pca_wt_temp, class)
+pca_wt_temp[is.na(pca_wt_temp)] <- 0
+```
+
+```{r}
+
+library(ggbiplot)
+str(pca_wt_temp) 
+
+pca <- pca_wt_temp[3:13,]
+#row.names(pca) <- sub("X","",wt_temp$replicate)
+pca_wt_temp.types <- rownames(pca)
+
+pca_wt_temp.types<-sub("\\d{1}$","",pca_wt_temp.types)
+pca_wt_temp.types<-sub("\\.$","",pca_wt_temp.types) #remomve dot at the end
+pca_wt_temp.types<-sub("X","",pca_wt_temp.types)
+pca_wt_temp.types<- gsub("early","30C",pca_wt_temp.types) 
+prin_comp_wttwmp <- prcomp(pca, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels  = pca_wt_temp.types,
+              groups = pca_wt_temp.types)
+g <- g + scale_color_discrete(name = '') +
+  scale_x_continuous(limits = c(-7, 7)) +
+  scale_y_continuous(limits = c(-7, 7))
+
+g <- g + theme(legend.position = "none")
+print(g)
+
+```
+Variable at 0,0 point are not consistent with the major part of variation in datatable
+```{r}
+pg_wt <-pca[,"PG [32:1]", drop = FALSE ] #Select one column in df
+pg_wt$temp <- rownames(pg_wt)
+pg_wt <-  melt(pg_wt[,])
+ggplot(pg_wt, aes(x = temp, y = value))  + geom_point()
+
+
+pe_wt<-pca[,"PE [36:3]", drop = FALSE ] #Select one column in df
+pe_wt$temp <- rownames(pe_wt)
+pe_wt <-  melt(pe_wt[,])
+ggplot(pe_wt, aes(x = temp, y = value))  + geom_point()
+
+c13_3 <- pca["X13C.3", , drop = FALSE ]
+c13_3$temp <- rownames(c13_3)
+c13_3 <-  melt(c13_3[,])
+c13_2 <- pca["X13C.2", , drop = FALSE ]
+c13_2$temp <- rownames(c13_2)
+c13_2 <-  melt(c13_2[,])
+c13_1 <- pca["X13C.1", , drop = FALSE ]
+c13_1$temp <- rownames(c13_1)
+c13_1 <-  melt(c13_1[,])
+
+ggplot(c13, aes(x = variable, y = value))  + geom_point() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+ggplot() + 
+  geom_point(data= c13_2, aes(x = variable, y = value, color = c13_2$temp)) +
+  geom_point(data= c13_1, aes(x = variable, y = value, color = c13_1$temp)) +
+  geom_point(data= c13_3, aes(x = variable, y = value, color = c13_3$temp)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+BiPlot
+-scores and variables on the same plot. Scores as points, variables as vectors.
+- relationship between scores and variables and relationship between the variables themnselfs.
+- vectors : cos of the angle matches the correlation between two vectors
+- vertical - difference between variables 
+- the longer arrows dominate the reults 
+
+ Points that are close together correspond to observations that have similar scores on the components displayed in the plot. To the extent that these components fit the data well, the points also correspond to observations that have similar values on the variables.
+ 
+ A vector points in the direction which is most like the variable represented by the vector. This is the direction which has the highest squared multiple correlation with the principal components. The length of the vector is proportional to the squared multiple correlation between the fitted values for the variable and the variable itself.
+
+```{r}
+pca["X4C.1","DIP"]
+pca["X4C.1","PC [32:2]"]
+pca["X4C.1","PC [32:1]"]
+pca["X4C.1","PC [34:1]"]
+pca["X4C.1","PC [36:3]"]
+```
+
+
+
+temp WT/SHC
+
+```{r}
+both<-read.csv(file='Desktop/both_wt_shc.csv',sep=';')
+names(both)
+both_temp <- both %>% select(type,lipids, length, DB, starts_with("X"), starts_with("early")) %>% tbl_df #only temp
+
+wt_shc_temp = mutate(both_temp, concated_column = paste(lipids, type, sep = '_'))
+
+wt_shc_temp <- t(wt_shc_temp) #transpose df
+colnames(wt_shc_temp) <- wt_shc_temp[14,] #first row as column name
+wt_shc_temp <- wt_shc_temp[-14,]  #delete frist column
+
+typeof(wt_shc_temp)
+wt_shc_temp<-as.data.frame(wt_shc_temp) #change to df
+
+str(wt_shc_temp)
+
+wt_shc_temp.lipids <- wt_shc_temp[2,]
+wt_shc_temp.types <- wt_shc_temp[1,]
+pca_both_temp <- wt_shc_temp[5:13,]
+str(pca_both_temp)
+pca_both_temp[] <- lapply(pca_both_temp, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(pca_both_temp, class)
+pca_both_temp[is.na(pca_both_temp)] <- 0
+
+
+
+```
+
+
+```{r}
+library(ggbiplot)
+
+str(pca_both_temp) 
+
+pca_both_temp.types <- rownames(pca_both_temp)
+pca_both_temp.types<-sub("\\d{1}$","",pca_both_temp.types)
+pca_both_temp.types<-sub("\\.$","",pca_both_temp.types) #remomve dot at the end
+pca_both_temp.types<-sub("X","",pca_both_temp.types)
+
+prin_comp_both <- prcomp(pca_both_temp, scale. = T)
+names(prin_comp_both)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_both$center #outputs the mean of variables
+prin_comp_both$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_both$rotation
+
+plot(prin_comp_both, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_both, obs.scale = 1,
+              labels  = pca_both_temp.types,
+              colour = pca_both_temp.types, varname.size=2)
+g <- g + scale_color_discrete(name = '') +
+          scale_x_continuous(limits = c(-10, 10)) +
+          scale_y_continuous(limits = c(-10, 10))
+
+g <- g + theme(legend.position = "none")
+print(g)
+```
+
+```{r}
+PG <-pca_both_temp[,"PG [32:1]_SHC", drop = FALSE ] #Select one column in df
+PG$temp <- rownames(PG)
+PG <-  melt(PG[,])
+ggplot(PG, aes(x = temp, y = value))  + geom_point()
+str(PG)
+
+```
+
+
+
+#pca based on lipid type
+
+
+```{r}
+wt_pc<- wt
+
+wt_pc_temp <- wt_pc %>% select(WT,length, DB, starts_with("X")) %>% tbl_df #only temp
+
+wt_pc_temp <-  separate(wt_pc_temp, WT, into = c("lipid", "len:db"),sep =  " ")
+
+wt_pc_temp.types <- wt_pc_temp$lipid
+
+# log transform 
+log.growth <- log1p(wt_pc_temp[,5:13])
+growth.pca_wt_temp <- prcomp(log.growth,
+                 center = TRUE,
+                 scale. = TRUE)
+# print method
+print(growth.pca_wt_temp)
+
+# plot method
+plot(growth.pca_wt_temp, type = "l") #first PC explain most of the variability in the data
+summary(growth.pca_wt_temp)
+g <- ggbiplot(growth.pca_wt_temp, obs.scale = 1, var.scale = 1,
+              labels = wt_pc_temp.types,
+              groups = interaction(wt_pc_temp.types), 
+              ellipse = TRUE)
+g <- g + scale_color_discrete(name = '')
+g <- g + theme(legend.direction = 'horizontal', 
+               legend.position = 'top')
+print(g)
+```
+
+#pca based on length
+
+```{r}
+wt_pc<- wt
+
+wt_pc_temp <- wt_pc %>% select(WT,length, DB, starts_with("X")) %>% tbl_df #only temp
+
+wt_pc_temp <-  separate(wt_pc_temp, WT, into = c("lipid", "len:db"),sep =  " ")
+
+wt_pc_temp.types <- wt_pc_temp$length
+
+# log transform 
+log.growth <- log1p(wt_pc_temp[,5:13])
+growth.pca_wt_temp <- prcomp(log.growth,
+                 center = TRUE,
+                 scale. = TRUE)
+# print method
+print(growth.pca_wt_temp)
+
+# plot method
+plot(growth.pca_wt_temp, type = "l") #first PC explain most of the variability in the data
+summary(growth.pca_wt_temp)
+g <- ggbiplot(growth.pca_wt_temp, obs.scale = 1, var.scale = 1,
+              labels = wt_pc_temp.types,
+              groups = interaction(wt_pc_temp.types), 
+               ellipse = TRUE)
+g <- g + scale_color_discrete(name = '')
+g <- g + theme(legend.direction = 'horizontal', 
+               legend.position = 'top')
+print(g)
+```
+
+#pca based on db
+
+```{r}
+wt_pc<- wt
+
+wt_pc_temp <- wt_pc %>% select(WT,length, DB, starts_with("X")) %>% tbl_df #only temp
+
+wt_pc_temp <-  separate(wt_pc_temp, WT, into = c("lipid", "len:db"),sep =  " ")
+
+wt_pc_temp.types <- wt_pc_temp$DB
+
+# log transform 
+log.growth <- log1p(wt_pc_temp[,5:13])
+growth.pca_wt_temp <- prcomp(log.growth,
+                 center = TRUE,
+                 scale. = TRUE)
+# print method
+print(growth.pca_wt_temp)
+
+# plot method
+plot(growth.pca_wt_temp, type = "l") #first PC explain most of the variability in the data
+summary(growth.pca_wt_temp)
+g <- ggbiplot(growth.pca_wt_temp, obs.scale = 1, var.scale = 1,
+              labels = wt_pc_temp.types,
+              groups = interaction(wt_pc_temp.types), 
+              circle = TRUE, ellipse = TRUE)
+g <- g + scale_color_discrete(name = '')
+g <- g + theme(legend.direction = 'horizontal', 
+               legend.position = 'top')
+print(g)
+```
+
+Zrob wykresy dla ph i dodaj early 1 jako temp 30 degree.
+zrob interpretacje wynikow
+
+Ph WT
+```{r}
+library(gplots)
+library(reshape)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+
+raw_WT<-read.csv(file='Desktop/lipids_WT.csv',sep=';')
+raw_SHC<-read.csv(file='Desktop/lipids_SHC.csv',sep=';')
+names(raw_WT)
+#merge data into a data frame with columns: WT, length, DB, growth, value
+wt_ph <- raw_WT %>% select(WT, length, DB, starts_with("pH")) %>%
+          gather( replicate, membr_perc, -one_of("WT", "length", "DB")) %>% tbl_df
+
+
+#Add the type column with values: CL, PC, PE, PG
+wt_ph<-data.frame(type=substr(wt_ph$WT,1,2), wt_ph)
+#remove repetition number so that repetitions are not recognizible
+wt_ph$replicate<-sub("\\d{1}$","",wt_ph$replicate)
+wt_ph$replicate<-sub("\\.$","",wt_ph$replicate) #remomve dot at the end
+
+wt_ph$replicate<-factor(wt_ph$replicate,levels=c("pH.5.5","pH.6","pH.7","pH.7.5","pH.8"))
+str(wt_ph)
+wt_ph[is.na(wt_ph)] <- 0 #make sure no missing values
+#wt_ph$membr_perc <- gsub(",",".",wt_ph$membr_perc) #convert , to .
+#wt_ph$membr_perc <- as.numeric(as.character(wt_ph$membr_perc))
+
+#Use ggplot2 to get  " value = f (growth stage)" plots separately for each lipid type and DB numer. 
+#Sizes of points are proportional to lipid length.  
+
+
+fig1<-ggplot(data=wt_ph,aes(x=replicate,y=membr_perc,size=length,color=DB))+
+  geom_point()+
+  facet_grid(facets="type ~ DB", scales="free")
+plot(fig1)
+
+fig2<-ggplot(data=wt_ph,aes(x=replicate,y=membr_perc,color=factor(length)))+
+  geom_jitter(width = 0.1)+
+  facet_grid(facets="type ~ DB", scales="free")
+plot(fig2) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+lm.growth<-lm(data=wt_growth,value~.)
+```
+
+```{r}
+pca_wt_ph <- raw_WT
+
+#only temp
+pca_wt_ph <- pca_wt_ph%>% select(WT, length, DB, starts_with("pH")) %>%tbl_df
+
+
+pca_wt_ph <- t(pca_wt_ph) #transpose df
+colnames(pca_wt_ph) <- pca_wt_ph[1,] #first row as column name
+pca_wt_ph <- pca_wt_ph[-1,]  #delete frist column
+pca_wt_ph[is.na(pca_wt_ph)] <- 0
+
+
+str(pca_wt_ph)
+typeof(pca_wt_ph)
+pca_wt_ph<-as.data.frame(pca_wt_ph) #change to df
+
+str(pca_wt_ph)
+
+pca_wt_ph.types <- colnames(pca_wt_ph) 
+pca_wt_ph[] <- lapply(pca_wt_ph, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(pca_wt_ph, class)
+pca_wt_ph[is.na(pca_wt_ph)] <- 0
+```
+
+```{r}
+
+library(ggbiplot)
+str(pca_wt_temp) 
+
+pca <- pca_wt_ph[3:17,]
+#row.names(pca) <- sub("X","",wt_temp$replicate)
+pca_wt_ph.types <- rownames(pca)
+pca_wt_ph.types<-sub("\\d{1}$","",pca_wt_ph.types)
+pca_wt_ph.types<-sub("\\.$","",pca_wt_ph.types) #remomve dot at the end
+
+#delete column with 0
+pca <- pca[, !(colnames(pca) %in% c("PC [36:4]"))]
+prin_comp_wttwmp <- prcomp(pca, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels  = pca_wt_ph.types,
+              groups = pca_wt_ph.types)
+g <- g + scale_color_discrete(name = '') +
+  scale_x_continuous(limits = c(-7, 7)) +
+  scale_y_continuous(limits = c(-7, 7))
+
+g <- g + theme(legend.position = "none")
+print(g)
+```
+
+
+shc temp
+```{r}
+#combine lipids and type column
+pca_shc_temp <- raw_SHC
+
+#only temp
+pca_shc_temp <- pca_shc_temp %>% select(SHC, length, DB, starts_with("X"), starts_with("early")) %>%tbl_df
+
+
+pca_shc_temp <- t(pca_shc_temp) #transpose df
+colnames(pca_shc_temp) <- pca_shc_temp[1,] #first row as column name
+pca_shc_temp <- pca_shc_temp[-1,]  #delete frist column
+pca_shc_temp[is.na(pca_shc_temp)] <- 0
+
+
+str(pca_shc_temp)
+typeof(pca_shc_temp)
+pca_shc_temp<-as.data.frame(pca_shc_temp) #change to df
+
+str(pca_shc_temp)
+
+pca_shc_temp.types <- colnames(pca_shc_temp) 
+pca_shc_temp[] <- lapply(pca_shc_temp, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(pca_shc_temp, class)
+pca_shc_temp[is.na(pca_shc_temp)] <- 0
+```
+
+```{r}
+
+library(ggbiplot)
+str(pca_shc_temp) 
+
+pca <- pca_shc_temp[3:11,]
+#row.names(pca) <- sub("X","",wt_temp$replicate)
+pca_shc_temp.types <- rownames(pca)
+
+pca_shc_temp.types<-sub("\\d{1}$","",pca_shc_temp.types)
+pca_shc_temp.types<-sub("\\.$","",pca_shc_temp.types) #remomve dot at the end
+pca_shc_temp.types<-sub("X","",pca_shc_temp.types)
+pca_shc_temp.types<- gsub("early","30C",pca_shc_temp.types) 
+prin_comp_wttwmp <- prcomp(pca, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels  = pca_shc_temp.types,
+              groups = pca_shc_temp.types)
+g <- g + scale_color_discrete(name = '') +
+  scale_x_continuous(limits = c(-7, 7)) +
+  scale_y_continuous(limits = c(-7, 7))
+
+g <- g + theme(legend.position = "none")
+print(g)
+
+```
+
+shc pH
+```{r}
+pca_shc_ph <- raw_SHC
+
+#only temp
+pca_shc_ph <- pca_shc_ph%>% select(SHC, length, DB, starts_with("pH")) %>%tbl_df
+
+
+pca_shc_ph <- t(pca_shc_ph) #transpose df
+colnames(pca_shc_ph) <- pca_shc_ph[1,] #first row as column name
+pca_shc_ph <- pca_shc_ph[-1,]  #delete frist column
+pca_shc_ph[is.na(pca_shc_ph)] <- 0
+
+
+str(pca_shc_ph)
+typeof(pca_shc_ph)
+pca_shc_ph<-as.data.frame(pca_shc_ph) #change to df
+
+str(pca_shc_ph)
+
+pca_shc_ph.types <- colnames(pca_shc_ph) 
+pca_shc_ph[] <- lapply(pca_shc_ph, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(pca_shc_ph, class)
+pca_shc_ph[is.na(pca_shc_ph)] <- 0
+```
+
+```{r}
+
+library(ggbiplot)
+str(pca_shc_ph) 
+
+pca <- pca_shc_ph[3:14,]
+#row.names(pca) <- sub("X","",wt_temp$replicate)
+pca_shc_ph.types <- rownames(pca)
+pca_shc_ph.types<-sub("\\d{1}$","",pca_shc_ph.types)
+pca_shc_ph.types<-sub("\\.$","",pca_shc_ph.types) #remomve dot at the end
+
+#delete column with 0
+pca <- pca[, !(colnames(pca) %in% c("PC [36:4]"))]
+prin_comp_wttwmp <- prcomp(pca, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels  = pca_shc_ph.types,
+              groups = pca_shc_ph.types)
+g <- g + scale_color_discrete(name = '') +
+  scale_x_continuous(limits = c(-7, 7)) +
+  scale_y_continuous(limits = c(-7, 7))
+
+g <- g + theme(legend.position = "none")
+print(g)
+```
+
+
+
+WT without DIP mDIP
+```{r}
+#combine lipids and type column
+pca_wt_temp_nodip <- raw_WT
+pca_wt_temp$TX.1.3 <- gsub("na","0",pca_wt_temp$TX.1.3)
+
+#only temp
+pca_wt_temp_nodip <- pca_wt_temp_nodip %>% select(WT, length, DB, starts_with("X"), starts_with("early"), -X13C.1) %>%tbl_df
+
+
+pca_wt_temp_nodip <- t(pca_wt_temp_nodip) #transpose df
+colnames(pca_wt_temp_nodip) <- pca_wt_temp_nodip[1,] #first row as column name
+pca_wt_temp_nodip <- pca_wt_temp_nodip[-1,]  #delete frist column
+pca_wt_temp_nodip[is.na(pca_wt_temp_nodip)] <- 0
+
+
+str(pca_wt_temp_nodip)
+typeof(pca_wt_temp_nodip)
+pca_wt_temp_nodip<-as.data.frame(pca_wt_temp_nodip) #change to df
+
+str(pca_wt_temp_nodip)
+
+pca_wt_temp_nodip.types <- colnames(pca_wt_temp_nodip) 
+pca_wt_temp_nodip[] <- lapply(pca_wt_temp_nodip, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(pca_wt_temp_nodip, class)
+pca_wt_temp_nodip[is.na(pca_wt_temp_nodip)] <- 0
+```
+
+```{r}
+
+library(ggbiplot)
+str(pca_wt_temp) 
+pca_wt_temp_nodip <- pca_wt_temp_nodip %>% select(-DIP, -mDIP)
+pca <- pca_wt_temp_nodip[3:13,]
+#row.names(pca) <- sub("X","",wt_temp$replicate)
+pca_wt_temp_nodip.types <- rownames(pca)
+
+pca_wt_temp_nodip.types<-sub("\\d{1}$","",pca_wt_temp_nodip.types)
+pca_wt_temp_nodip.types<-sub("\\.$","",pca_wt_temp_nodip.types) #remomve dot at the end
+pca_wt_temp_nodip.types<-sub("X","",pca_wt_temp_nodip.types)
+pca_wt_temp_nodip.types<- gsub("early","30C",pca_wt_temp_nodip.types) 
+prin_comp_wttwmp <- prcomp(pca, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels  = pca_wt_temp_nodip.types,
+              groups = pca_wt_temp_nodip.types)
+g <- g + scale_color_discrete(name = '') +
+  scale_x_continuous(limits = c(-7, 7)) +
+  scale_y_continuous(limits = c(-7, 7))
+
+g <- g + theme(legend.position = "none")
+print(g)
+```
+WT_temp_aligned
+```{r}
+both<-read.csv(file='Desktop/both_wt_shc.csv',sep=';')
+names(both)
+both_temp <- both %>% select(type,lipids, length, DB, starts_with("X"), starts_with("early")) %>% tbl_df #only temp
+
+wt_align_temp <- filter(both_temp, type == 'WT')
+
+wt_align_temp <- t(wt_align_temp) #transpose df
+colnames(wt_align_temp) <- wt_align_temp[2,] #first row as column name
+wt_align_temp <- wt_align_temp[-2,]  #delete frist column
+
+typeof(wt_align_temp)
+wt_align_temp<-as.data.frame(wt_align_temp) #change to df
+
+str(wt_align_temp)
+
+
+wt_align_temp <- wt_align_temp[4:12,]
+str(wt_align_temp)
+wt_align_temp[] <- lapply(wt_align_temp, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(wt_align_temp, class)
+wt_align_temp[is.na(wt_align_temp)] <- 0
+
+
+
+```
+
+
+```{r}
+library(ggbiplot)
+
+str(pca_both_temp) 
+
+wt_align_temp.types <- rownames(wt_align_temp)
+wt_align_temp.types<-sub("\\d{1}$","",wt_align_temp.types)
+wt_align_temp.types<-sub("\\.$","",wt_align_temp.types) #remomve dot at the end
+wt_align_temp.types<-sub("X","",wt_align_temp.types)
+
+prin_comp_both <- prcomp(wt_align_temp, scale. = T)
+names(prin_comp_both)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_both$center #outputs the mean of variables
+prin_comp_both$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_both$rotation
+
+plot(prin_comp_both, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_both, obs.scale = 1,
+              labels  = wt_align_temp.types,
+              groups =  wt_align_temp.types, varname.size=2, ellipse = TRUE)
+g <- g + scale_color_discrete(name = '') +
+          scale_x_continuous(limits = c(-10, 10)) +
+          scale_y_continuous(limits = c(-10, 10))
+
+g <- g + theme(legend.position = "none")
+print(g)
+```
+GROWTH STAGE WT
+```{r}
+pca_wt_gs <- raw_WT
+
+#only temp
+pca_wt_gs <- pca_wt_gs%>% select(WT, length, DB, starts_with("early"), starts_with("mid"), starts_with("late"), starts_with("stat")) %>%tbl_df
+
+
+pca_wt_gs <- t(pca_wt_gs) #transpose df
+colnames(pca_wt_gs) <- pca_wt_gs[1,] #first row as column name
+pca_wt_gs <- pca_wt_gs[-1,]  #delete frist column
+pca_wt_gs[is.na(pca_wt_gs)] <- 0
+
+
+str(pca_wt_gs)
+typeof(pca_wt_gs)
+pca_wt_gs<-as.data.frame(pca_wt_gs) #change to df
+
+str(pca_wt_gs)
+
+
+pca_wt_gs[] <- lapply(pca_wt_gs, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(pca_wt_gs, class)
+pca_wt_gs[is.na(pca_wt_gs)] <- 0
+```
+
+```{r}
+
+library(ggbiplot)
+str(pca_wt_gs) 
+
+pca <- pca_wt_gs[3:14,]
+#row.names(pca) <- sub("X","",wt_temp$replicate)
+pca_wt_gs.types <- rownames(pca)
+pca_wt_gs.types<-sub("\\d{1}$","",pca_wt_gs.types)
+pca_wt_gs.types<-sub("\\.$","",pca_wt_gs.types) #remomve dot at the end
+
+#delete column with 0
+pca <- pca[, !(colnames(pca) %in% c("PC [36:4]"))]
+prin_comp_wttwmp <- prcomp(pca, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels  = pca_wt_gs.types,
+              groups = pca_wt_gs.types, ellipse = TRUE)
+g <- g + scale_color_discrete(name = '') +
+  scale_x_continuous(limits = c(-8, 8)) +
+  scale_y_continuous(limits = c(-8, 8))
+
+g <- g + theme(legend.position = "none")
+print(g)
+```
+GROWTH STAGE SHC
+```{r}
+pca_shc_gs <- raw_SHC
+
+#only temp
+pca_shc_gs <- pca_shc_gs%>% select(SHC, length, DB, starts_with("early"), starts_with("mid"), starts_with("late"), starts_with("stat")) %>%tbl_df
+
+
+pca_shc_gs <- t(pca_shc_gs) #transpose df
+colnames(pca_shc_gs) <- pca_shc_gs[1,] #first row as column name
+pca_shc_gs <- pca_shc_gs[-1,]  #delete frist column
+pca_shc_gs[is.na(pca_shc_gs)] <- 0
+
+
+str(pca_shc_gs)
+typeof(pca_shc_gs)
+pca_shc_gs<-as.data.frame(pca_shc_gs) #change to df
+
+str(pca_shc_gs)
+
+pca_shc_gs[] <- lapply(pca_shc_gs, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(pca_shc_gs, class)
+pca_shc_gs[is.na(pca_shc_gs)] <- 0
+```
+
+```{r}
+
+library(ggbiplot)
+str(pca_shc_gs) 
+
+pca <- pca_shc_gs[3:14,]
+#row.names(pca) <- sub("X","",wt_temp$replicate)
+pca_shc_gs.types <- rownames(pca)
+pca_shc_gs.types<-sub("\\d{1}$","",pca_shc_gs.types)
+pca_shc_gs.types<-sub("\\.$","",pca_shc_gs.types) #remomve dot at the end
+
+#delete column with 0
+pca <- pca[, !(colnames(pca) %in% c("PC [36:4]"))]
+prin_comp_wttwmp <- prcomp(pca, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels  = pca_shc_gs.types,
+              groups = pca_shc_gs.types, ellipse = TRUE)
+g <- g + scale_color_discrete(name = '') +
+  scale_x_continuous(limits = c(-7, 7)) +
+  scale_y_continuous(limits = c(-7, 7))
+
+g <- g + theme(legend.position = "none")
+print(g)
+```
+
+WT NaCl
+```{r}
+pca_wt_nacl <- raw_WT
+
+#only temp
+pca_wt_nacl <- pca_wt_nacl%>% select(WT, length, DB, starts_with("Na")) %>%tbl_df
+
+
+pca_wt_nacl <- t(pca_wt_nacl) #transpose df
+colnames(pca_wt_nacl) <- pca_wt_nacl[1,] #first row as column name
+pca_wt_nacl <- pca_wt_nacl[-1,]  #delete frist column
+pca_wt_nacl[is.na(pca_wt_nacl)] <- 0
+
+
+str(pca_wt_nacl)
+typeof(pca_wt_nacl)
+pca_wt_nacl<-as.data.frame(pca_wt_nacl) #change to df
+
+str(pca_wt_nacl)
+
+
+pca_wt_nacl[] <- lapply(pca_wt_nacl, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(pca_wt_nacl, class)
+pca_wt_nacl[is.na(pca_wt_nacl)] <- 0
+```
+
+```{r}
+
+library(ggbiplot)
+str(pca_wt_nacl) 
+
+pca <- pca_wt_nacl[3:11,]
+#row.names(pca) <- sub("X","",wt_temp$replicate)
+pca_wt_nacl.types <- rownames(pca)
+pca_wt_nacl.types<-sub("\\d{1}$","",pca_wt_nacl.types)
+pca_wt_nacl.types<-sub("\\.$","",pca_wt_nacl.types) #remomve dot at the end
+
+#delete column with 0
+pca <- pca[, !(colnames(pca) %in% c("PC [36:4]"))]
+prin_comp_wttwmp <- prcomp(pca, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels  = pca_wt_nacl.types,
+              groups = pca_wt_nacl.types, ellipse = TRUE)
+g <- g + scale_color_discrete(name = '') +
+  scale_x_continuous(limits = c(-8, 8)) +
+  scale_y_continuous(limits = c(-8, 8))
+
+g <- g + theme(legend.position = "none")
+print(g)
+```
+
+SHC NaCl
+
+```{r}
+pca_shc_nacl <- raw_SHC
+
+#only temp
+pca_shc_nacl <- pca_shc_nacl%>% select(SHC, length, DB, starts_with("Na")) %>%tbl_df
+
+
+pca_shc_nacl <- t(pca_shc_nacl) #transpose df
+colnames(pca_shc_nacl) <- pca_shc_nacl[1,] #first row as column name
+pca_shc_nacl <- pca_shc_nacl[-1,]  #delete frist column
+pca_shc_nacl[is.na(pca_shc_nacl)] <- 0
+
+
+str(pca_shc_nacl)
+typeof(pca_shc_nacl)
+pca_shc_nacl<-as.data.frame(pca_shc_nacl) #change to df
+
+str(pca_shc_nacl)
+
+pca_shc_nacl[] <- lapply(pca_shc_nacl, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(pca_shc_nacl, class)
+pca_shc_nacl[is.na(pca_shc_nacl)] <- 0
+```
+
+```{r}
+
+library(ggbiplot)
+str(pca_shc_nacl) 
+
+pca <- pca_shc_nacl[3:8,]
+#row.names(pca) <- sub("X","",wt_temp$replicate)
+pca_shc_nacl.types <- rownames(pca)
+pca_shc_nacl.types<-sub("\\d{1}$","",pca_shc_nacl.types)
+pca_shc_nacl.types<-sub("\\.$","",pca_shc_nacl.types) #remomve dot at the end
+
+#delete column with 0
+pca <- pca[, !(colnames(pca) %in% c("PC [36:4]"))]
+prin_comp_wttwmp <- prcomp(pca, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels  = pca_shc_nacl.types,
+              groups = pca_shc_nacl.types, ellipse = TRUE)
+g <- g + scale_color_discrete(name = '') +
+  scale_x_continuous(limits = c(-7, 7)) +
+  scale_y_continuous(limits = c(-7, 7))
+
+g <- g + theme(legend.position = "none")
+print(g)
+```
+
+shc Met
+
+```{r}
+pca_shc_met <- raw_SHC
+
+#only temp
+pca_shc_met <- pca_shc_met%>% select(SHC, length, DB, starts_with("Met")) %>%tbl_df
+
+
+pca_shc_met <- t(pca_shc_met) #transpose df
+colnames(pca_shc_met) <- pca_shc_met[1,] #first row as column name
+pca_shc_met <- pca_shc_met[-1,]  #delete frist column
+pca_shc_met[is.na(pca_shc_met)] <- 0
+
+
+str(pca_shc_met)
+typeof(pca_shc_met)
+pca_shc_met<-as.data.frame(pca_shc_met) #change to df
+
+str(pca_shc_met)
+
+pca_shc_met[] <- lapply(pca_shc_met, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(pca_shc_met, class)
+pca_shc_met[is.na(pca_shc_met)] <- 0
+```
+
+```{r}
+
+library(ggbiplot)
+str(pca_shc_met) 
+
+pca <- pca_shc_met[3:8,]
+#row.names(pca) <- sub("X","",wt_temp$replicate)
+pca_shc_met.types <- rownames(pca)
+pca_shc_met.types<-sub("\\d{1}$","",pca_shc_met.types)
+pca_shc_met.types<-sub("\\.$","",pca_shc_met.types) #remomve dot at the end
+
+#delete column with 0
+pca <- pca[, !(colnames(pca) %in% c("PC [36:4]"))]
+prin_comp_wttwmp <- prcomp(pca, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels  = pca_shc_met.types,
+              groups = pca_shc_met.types, ellipse = TRUE)
+g <- g + scale_color_discrete(name = '') +
+  scale_x_continuous(limits = c(-7, 7)) +
+  scale_y_continuous(limits = c(-7, 7))
+
+g <- g + theme(legend.position = "none")
+print(g)
+
+```
+ wt MetOH
+ 
+```{r}
+pca_wt_met <- raw_WT
+
+#only temp
+pca_wt_met <- pca_wt_met%>% select(WT, length, DB, starts_with("Met")) %>%tbl_df
+
+
+pca_wt_met <- t(pca_wt_met) #transpose df
+colnames(pca_wt_met) <- pca_wt_met[1,] #first row as column name
+pca_wt_met <- pca_wt_met[-1,]  #delete frist column
+pca_wt_met[is.na(pca_wt_met)] <- 0
+
+
+str(pca_wt_met)
+typeof(pca_wt_met)
+pca_wt_met<-as.data.frame(pca_wt_met) #change to df
+
+str(pca_wt_met)
+
+
+pca_wt_met[] <- lapply(pca_wt_met, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(pca_wt_met, class)
+pca_wt_met[is.na(pca_wt_met)] <- 0
+```
+
+```{r}
+
+library(ggbiplot)
+str(pca_wt_met) 
+
+pca <- pca_wt_met[3:8,]
+#row.names(pca) <- sub("X","",wt_temp$replicate)
+pca_wt_met.types <- rownames(pca)
+pca_wt_met.types<-sub("\\d{1}$","",pca_wt_met.types)
+pca_wt_met.types<-sub("\\.$","",pca_wt_met.types) #remomve dot at the end
+
+#delete column with 0
+pca <- pca[, !(colnames(pca) %in% c("PC [36:4]"))]
+prin_comp_wttwmp <- prcomp(pca, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels  = pca_wt_met.types,
+              groups = pca_wt_met.types, ellipse = TRUE)
+g <- g + scale_color_discrete(name = '') +
+  scale_x_continuous(limits = c(-8, 8)) +
+  scale_y_continuous(limits = c(-8, 8))
+
+g <- g + theme(legend.position = "none")
+print(g)
+```
+ALIGNT DATA SET:
+```{r}
+align_wt_shc <-read.csv(file='Desktop/aligned_shc_wt.csv',sep=';')
+align <- align_wt_shc
+
+#only temp
+align <- align%>% select(type, lipids, length, DB, starts_with("X"), starts_with("early")) %>%tbl_df
+align = mutate(align, concated_column = paste(lipids, type, sep = '_'))
+
+
+align <- t(align) #transpose df
+colnames(align) <- align[14,] #first row as column name
+align <- align[-14,]  #delete frist column
+align[is.na(align)] <- 0
+
+
+str(align)
+typeof(align)
+align<-as.data.frame(align) #change to df
+
+str(align)
+
+both <- align[5:13, ]
+both[] <- lapply(both, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(both, class)
+both[is.na(both)] <- 0
+```
+
+```{r}
+
+library(ggbiplot)
+str(align) 
+
+
+#row.names(pca) <- sub("X","",wt_temp$replicate)
+align.types <- rownames(both)
+align.wt_shc <- align_wt_shc$type
+align.types<-sub("X","",align.types)
+align.types<-sub("\\d{1}$","",align.types)
+align.types<-sub("\\.$","",align.types) #remomve dot at the end
+
+#delete column with 0
+#both_pca <- both_pca[, !(colnames(both_pca) %in% c("PC [36:4]"))]
+prin_comp_wttwmp <- prcomp(both, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels  = align.types, loadings.colour = align.wt_shc,
+              groups = align.types, ellipse = TRUE,  varname.size=2)
+g <- g + scale_color_discrete(name = '') +
+  scale_x_continuous(limits = c(-15, 15)) +
+  scale_y_continuous(limits = c(-15, 15))
+
+g <- g + theme(legend.position = "none")
+
+print(g)
+```
+How temp changes in WT and SHC?
+- align dataset
+```{r}
+align_wt_shc <-read.csv(file='Desktop/both_test_2.csv',sep=';')
+align <- align_wt_shc
+
+#only temp
+align <- align%>% select(type, SHC, lipids, lipids_shc, length, DB, starts_with("X"), starts_with("early")) %>%tbl_df
+align = mutate(align, concated_column = paste(lipids, type, sep = '_'))
+
+
+align <- t(align) #transpose df
+colnames(align) <- align[14,] #first row as column name
+align <- align[-14,]  #delete frist column
+align[is.na(align)] <- 0
+
+
+str(align)
+typeof(align)
+align<-as.data.frame(align) #change to df
+
+str(align)
+
+both <- align[7:24, ]
+both[] <- lapply(both, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(both, class)
+both[is.na(both)] <- 0
+```
+
+```{r}
+
+library(ggbiplot)
+str(align) 
+
+
+#row.names(pca) <- sub("X","",wt_temp$replicate)
+align.types <- rownames(both)
+
+align.types<-sub("X","",align.types)
+align.types<-sub("\\d{1}$","",align.types)
+align.types<-sub("\\.$","",align.types) #remomve dot at the end
+
+#delete column with 0
+#both_pca <- both_pca[, !(colnames(both_pca) %in% c("PC [36:4]"))]
+prin_comp_wttwmp <- prcomp(both, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = align.types,
+              groups = align.types)
+g <- g + scale_color_discrete(name = '') +
+  scale_x_continuous(limits = c(-15, 15)) +
+  scale_y_continuous(limits = c(-15, 15))
+
+g <- g + theme(legend.position = "none")
+
+print(g)
+```
+How pH changes in WT and SHC?
+- align dataset
+```{r}
+ph_align_wt_shc <-read.csv(file='Desktop/ph_align.csv',sep=';')
+ph <- ph_align_wt_shc
+
+#only ph
+ph <- ph%>% select(type, SHC, lipids, lipids_shc, length, DB, starts_with("pH")) %>%tbl_df
+ph = mutate(ph, concated_column = paste(lipids, type, sep = '_'))
+
+
+ph <- t(ph) #transpose df
+colnames(ph) <- ph[31,] #first row as column name
+ph <- ph[-31,]  #delete frist column
+ph[is.na(ph)] <- 0
+
+
+str(ph)
+typeof(ph)
+ph<-as.data.frame(ph) #change to df
+
+str(ph)
+
+ph_data <- ph[7:30, ]
+ph_data <- ph_data[,-9]
+ph_data[] <- lapply(ph_data, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(ph_data, class)
+ph_data[is.na(ph_data)] <- 0
+```
+
+```{r}
+
+library(ggbiplot)
+str(align) 
+
+
+#row.names(pca) <- sub("X","",wt_temp$replicate)
+ph_data.types <- rownames(ph_data)
+
+ph_data.types<-sub("X","",ph_data.types)
+ph_data.types<-sub("\\d{1}$","",ph_data.types)
+ph_data.types<-sub("\\.$","",ph_data.types) #remomve dot at the end
+
+#delete column with 0
+#both_pca <- both_pca[, !(colnames(both_pca) %in% c("PC [36:4]"))]
+prin_comp_wttwmp <- prcomp(ph_data, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = ph_data.types,
+              groups = ph_data.types, ellipse = TRUE)
+g <- g + scale_color_discrete(name = '') +
+  scale_x_continuous(limits = c(-7, 7)) +
+  scale_y_continuous(limits = c(-4, 4))
+
+g <- g + theme(legend.position = "none")
+
+print(g)
+```
+
+How early_growth changes in WT and SHC?
+- align dataset
+```{r}
+all_align_wt_shc <-read.csv(file='Desktop/compare_conditions_wtshc.csv',sep=';')
+gs <- all_align_wt_shc
+
+#only growth stage (gs)
+gs <- gs%>% select(type, SHC, lipids, lipids_shc, length, DB, starts_with("early"),starts_with("mid"),starts_with("late"),starts_with("stat")) %>%tbl_df
+gs = mutate(gs, concated_column = paste(lipids, type, sep = '_'))
+
+
+gs <- t(gs) #transpose df
+colnames(gs) <- gs[31,] #first row as column name
+gs <- gs[-31,]  #delete frist column
+gs[is.na(gs)] <- 0
+
+
+str(gs)
+typeof(gs)
+gs<-as.data.frame(gs) #change to df
+
+str(gs)
+
+gs_data <- gs[7:30, ]
+gs_data <- gs_data[,-9]
+gs_data[] <- lapply(gs_data, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(gs_data, class)
+gs_data[is.na(gs_data)] <- 0
+```
+
+```{r}
+
+library(ggbiplot)
+str(align) 
+
+
+#row.names(pca) <- sub("X","",wt_temp$replicate)
+gs_data.types <- rownames(gs_data)
+
+gs_data.types<-sub("X","",gs_data.types)
+gs_data.types<-sub("\\d{1}$","",gs_data.types)
+gs_data.types<-sub("\\.$","",gs_data.types) #remomve dot at the end
+
+#delete column with 0
+#both_pca <- both_pca[, !(colnames(both_pca) %in% c("PC [36:4]"))]
+prin_comp_wttwmp <- prcomp(gs_data, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = gs_data.types,
+              groups = gs_data.types,ellipse = TRUE)
+g <- g + scale_color_discrete(name = '')
+
+g <- g + theme(legend.position = "none") +
+  scale_x_continuous(limits = c(-7, 7)) +
+  scale_y_continuous(limits = c(-5, 5))
+
+print(g)
+```
+How salt changes in WT and SHC?
+- align dataset
+```{r}
+all_align_wt_shc <-read.csv(file='Desktop/compare_conditions_wtshc.csv',sep=';')
+salt <- all_align_wt_shc
+
+#only growth stage (gs)
+salt <- salt%>% select(type, SHC, lipids, lipids_shc, length, DB, starts_with("Na")) %>%tbl_df
+salt = mutate(salt, concated_column = paste(lipids, type, sep = '_'))
+
+
+salt <- t(salt) #transpose df
+colnames(salt) <- salt[19,] #first row as column name
+salt <- salt[-19,]  #delete frist column
+salt[is.na(salt)] <- 0
+
+
+str(salt)
+typeof(salt)
+salt<-as.data.frame(salt) #change to df
+
+salt_data <- salt[7:18, ]
+salt_data <- salt_data[,-9]
+salt_data[] <- lapply(salt_data, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(salt_data, class)
+salt_data[is.na(salt_data)] <- 0
+```
+
+```{r}
+
+library(ggbiplot)
+str(align) 
+
+
+#row.names(pca) <- sub("X","",wt_temp$replicate)
+salt_data.types <- rownames(salt_data)
+
+salt_data.types<-sub("X","",salt_data.types)
+salt_data.types<-sub("\\d{1}$","",salt_data.types)
+salt_data.types<-sub("\\.$","",salt_data.types) #remomve dot at the end
+
+#delete column with 0
+#both_pca <- both_pca[, !(colnames(both_pca) %in% c("PC [36:4]"))]
+prin_comp_wttwmp <- prcomp(salt_data, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = salt_data.types,
+              groups = salt_data.types, var.axes = FALSE)
+g <- g + scale_color_discrete(name = '')
+
+g <- g + theme(legend.position = "none")
+
+print(g)
+```
+
+How MetOH changes in WT and SHC?
+- align dataset
+```{r}
+all_align_wt_shc <-read.csv(file='Desktop/compare_conditions_wtshc.csv',sep=';')
+met <- all_align_wt_shc
+
+#only growth stage (gs)
+met <- met%>% select(type, SHC, lipids, lipids_shc, length, DB, starts_with("Met")) %>%tbl_df
+met = mutate(met, concated_column = paste(lipids, type, sep = '_'))
+
+
+met <- t(met) #transpose df
+colnames(met) <- met[19,] #first row as column name
+met <- met[-19,]  #delete frist column
+met[is.na(met)] <- 0
+
+met<-as.data.frame(met) #change to df
+
+met_data <- met[7:18, ]
+met_data <- met_data[,-9]
+met_data[] <- lapply(met_data, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(met_data, class)
+met_data[is.na(met_data)] <- 0
+```
+
+```{r}
+
+library(ggbiplot)
+str(align) 
+
+
+#row.names(pca) <- sub("X","",wt_temp$replicate)
+met_data.types <- rownames(met_data)
+
+met_data.types<-sub("X","",met_data.types)
+met_data.types<-sub("\\d{1}$","",met_data.types)
+met_data.types<-sub("\\.$","",met_data.types) #remomve dot at the end
+
+#delete column with 0
+#both_pca <- both_pca[, !(colnames(both_pca) %in% c("PC [36:4]"))]
+prin_comp_wttwmp <- prcomp(met_data, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = met_data.types,
+              groups = met_data.types, var.axes = FALSE)
+g <- g + scale_color_discrete(name = '')
+
+g <- g + theme(legend.position = "none")
+
+print(g)
+```
+
+
+
+DB ALIGN
+```{r}
+feature_aligne <- read.csv(file='Desktop/all_data_wtshc.csv',sep=';')
+feature_aligne[is.na(feature_aligne)] <- 0
+
+feature_aligne <-  separate(feature_aligne, lipids, into = c("lipid", "lenDB"),sep =  " ")
+db <- select(feature_aligne, -c(lipid, type, length, lenDB))
+db[] <- lapply(db, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(db, class)
+str(db)
+db<-as.data.frame(db)
+db_aggregated <-aggregate(. ~ DB, db, sum)
+
+db_aggregated <- t(db_aggregated) #transpose df
+colnames(db_aggregated) <- db_aggregated[1,] #first row as column name
+db_aggregated <- db_aggregated[-1,]  #delete frist column
+
+db.types <- rownames(db_aggregated)
+db.types<-sub("X","",db.types)
+db.types<-sub("\\d{1}$","",db.types)
+db.types<-sub("\\.$","",db.types) #remomve dot at the end
+
+#delete column with 0
+#both_pca <- both_pca[, !(colnames(both_pca) %in% c("PC [36:4]"))]
+prin_comp_wttwmp <- prcomp(db_aggregated, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = db.types,
+              groups = db.types)
+g <- g + scale_color_discrete(name = '') 
+
+g <- g + theme(legend.position = "none")
+
+print(g)
+
+
+
+```
+same plot but only for temp:
+```{r}
+feature_aligne <- read.csv(file='Desktop/all_data_wtshc.csv',sep=';')
+feature_aligne[is.na(feature_aligne)] <- 0
+
+feature_aligne <-  separate(feature_aligne, lipids, into = c("lipid", "lenDB"),sep =  " ")
+db_temp <- select(feature_aligne,DB,  starts_with("X"),starts_with("early"), - X13C.1)
+db_temp[] <- lapply(db_temp, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(db_temp, class)
+str(db_temp)
+db_temp<-as.data.frame(db_temp)
+db_temp_aggregated <-aggregate(. ~ DB, db_temp, sum)
+
+db_temp_aggregated <- t(db_temp_aggregated) #transpose df
+colnames(db_temp_aggregated) <- db_temp_aggregated[1,] #first row as column name
+db_temp_aggregated <- db_temp_aggregated[-1,]  #delete frist column
+
+db_temp.types <- rownames(db_temp_aggregated)
+db_temp.types<-sub("X","",db_temp.types)
+db_temp.types<-sub("\\d{1}$","",db_temp.types)
+db_temp.types<-sub("\\.$","",db_temp.types) #remomve dot at the end
+db_temp.types<-sub("early","30C",db_temp.types)
+db_temp.types<-sub("30C1_shc","30C_shc",db_temp.types)
+#delete column with 0
+#both_pca <- both_pca[, !(colnames(both_pca) %in% c("PC [36:4]"))]
+prin_comp_wttwmp <- prcomp(db_temp_aggregated, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = db_temp.types,
+              groups = db_temp.types)
+g <- g + scale_color_discrete(name = '') +
+  scale_x_continuous(limits = c(-8, 8)) +
+  scale_y_continuous(limits = c(-8, 8))
+
+g <- g + theme(legend.position = "none") + theme_bw() 
+
+print(g)
+
+
+
+```
+
+TYPE ALIGN
+```{r}
+feature_aligne <- read.csv(file='Desktop/all_data_wtshc.csv',sep=';')
+feature_aligne[is.na(feature_aligne)] <- 0
+
+feature_aligne <-  separate(feature_aligne, lipids, into = c("lipid", "lenDB"),sep =  " ")
+lipid<- select(feature_aligne, -c(DB, type, length, lenDB, pH.6_shc.2,X13C.1))
+lipid[] <- lapply(lipid, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(lipid, class)
+str(lipid)
+lipid<-as.data.frame(lipid)
+lipid_aggregated <-aggregate(. ~ lipid, lipid, sum)
+
+lipid_aggregated <- t(lipid_aggregated) #transpose df
+colnames(lipid_aggregated) <- lipid_aggregated[1,] #first row as column name
+lipid_aggregated <- lipid_aggregated[-1,]  #delete frist column
+lipid_aggregated <-as.data.frame(lipid_aggregated)
+lipid.types <- rownames(lipid_aggregated)
+lipid.types<-sub("X","",lipid.types)
+lipid.types<-sub("\\d{1}$","",lipid.types)
+lipid.types<-sub("\\.$","",lipid.types) #remomve dot at the end
+
+rownames(lipid_aggregated)<-sub("X","",rownames(lipid_aggregated))
+test <- lipid_aggregated
+test$type <-rownames(lipid_aggregated)
+test <-  separate(test, type, into = c("condition", "type"),sep =  "_")
+test$type<-sub("\\d{1}$","",test$type)
+test$type<-sub("\\.$","",test$type)
+test$type[is.na(test$type)] <- "WT"
+str(test)
+lipid_aggregated <- lapply(lipid_aggregated, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+
+sapply(lipid_aggregated, class)
+lipid_aggregated <- as.data.frame(lipid_aggregated)
+rownames(lipid_aggregated) <- rownames(test)
+#delete column with 0
+#both_pca <- both_pca[, !(colnames(both_pca) %in% c("PC [36:4]"))]
+str(lipid_aggregated)
+prin_comp_wttwmp <- prcomp(lipid_aggregated, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = lipid.types,
+              groups = test$type)
+g <- g + scale_color_discrete(name = '')
+
+g <- g + theme(legend.position = "none")
+
+print(g)
+
+
+
+```
+
+
+
+Length ALIGN
+```{r}
+feature_aligne <- read.csv(file='Desktop/all_data_wtshc.csv',sep=';')
+feature_aligne[is.na(feature_aligne)] <- 0
+
+feature_aligne <-  separate(feature_aligne, lipids, into = c("lipid", "lenDB"),sep =  " ")
+len<- select(feature_aligne, -c(DB, type, lipid, lenDB))
+len[] <- lapply(len, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(len, class)
+str(len)
+len<-as.data.frame(len)
+len_aggregated <-aggregate(. ~ length, len, sum)
+
+len_aggregated <- t(len_aggregated) #transpose df
+colnames(len_aggregated) <- len_aggregated[1,] #first row as column name
+len_aggregated <- len_aggregated[-1,]  #delete frist column
+
+len.types <- rownames(len_aggregated)
+len.types<-sub("X","",len.types)
+len.types<-sub("\\d{1}$","",len.types)
+len.types<-sub("\\.$","",len.types) #remomve dot at the end
+
+len_aggregated<-as.data.frame(len_aggregated)
+len_aggregated[] <- lapply(len_aggregated, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(len_aggregated, class)
+#delete column with 0
+#both_pca <- both_pca[, !(colnames(both_pca) %in% c("PC [36:4]"))]
+
+
+prin_comp_wttwmp <- prcomp(len_aggregated, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = len.types,
+              groups = len.types)
+g <- g + scale_color_discrete(name = '')
+
+g <- g + theme(legend.position = "none")
+
+print(g)
+
+
+
+```
+
+
+TYPE ONLY FOR WT
+```{r}
+type_wt <- raw_WT
+type_wt[is.na(type_wt)] <- 0
+
+type_wt <-  separate(type_wt,WT, into = c("lipid", "lenDB"),sep =  " ")
+lipid_wt<- select(type_wt, -c(DB, length, lenDB))
+lipid_wt[] <- lapply(lipid_wt, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(lipid_wt, class)
+str(lipid_wt)
+lipid_wt<-as.data.frame(lipid_wt)
+
+library("plyr")
+lipid_aggregated_wt <- ddply(lipid_wt, .(lipid), colwise(sum))
+
+lipid_aggregated_wt <- t(lipid_aggregated_wt) #transpose df
+colnames(lipid_aggregated_wt) <- lipid_aggregated_wt[1,] #first row as column name
+lipid_aggregated_wt <- lipid_aggregated_wt[-1,]  #delete frist column
+
+lipid_wt.types <- rownames(lipid_aggregated_wt)
+lipid_wt.types<-sub("X","",lipid_wt.types)
+lipid_wt.types<-sub("\\d{1}$","",lipid_wt.types)
+lipid_wt.types<-sub("\\.$","",lipid_wt.types) #remomve dot at the end
+
+lipid_aggregated_wt<-as.data.frame(lipid_aggregated_wt)
+lipid_aggregated_wt[] <- lapply(lipid_aggregated_wt, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(lipid_aggregated_wt, class)
+lipid_aggregated_wt[is.na(lipid_aggregated_wt)] <- 0
+#delete column with 0
+#both_pca <- both_pca[, !(colnames(both_pca) %in% c("PC [36:4]"))]
+
+
+prin_comp_wttwmp <- prcomp(lipid_aggregated_wt, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = lipid_wt.types,
+              groups = lipid_wt.types,
+              ellipse = TRUE)
+g <- g + scale_color_discrete(name = '')
+
+g <- g + theme(legend.position = "none")
+
+print(g)
+
+
+
+```
+
+
+
+
+TYPE ONLY FOR SHC
+```{r}
+type_shc <- read.csv(file='Desktop/lipids_SHC.csv',sep=';')
+type_shc[is.na(type_shc)] <- 0
+
+type_shc <-  separate(type_shc,SHC, into = c("lipid", "lenDB"),sep =  " ")
+lipid_shc<- select(type_shc, -c(DB, length, lenDB))
+lipid_shc[] <- lapply(lipid_shc, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(lipid_shc, class)
+str(lipid_shc)
+lipid_shc<-as.data.frame(lipid_shc)
+
+library("plyr")
+lipid_aggregated_shc <- ddply(lipid_shc, .(lipid), colwise(sum))
+
+lipid_aggregated_shc <- t(lipid_aggregated_shc) #transpose df
+colnames(lipid_aggregated_shc) <- lipid_aggregated_shc[1,] #first row as column name
+lipid_aggregated_shc <- lipid_aggregated_shc[-1,]  #delete frist column
+lipid_aggregated_shc<- as.data.frame(lipid_aggregated_shc)
+
+lipid_shc.types <- rownames(lipid_aggregated_shc)
+lipid_shc.types<-sub("X","",lipid_shc.types)
+lipid_shc.types<-sub("\\d{1}$","",lipid_shc.types)
+lipid_shc.types<-sub("\\.$","",lipid_shc.types) #remomve dot at the end
+
+lipid_aggregated_wt<-as.data.frame(lipid_aggregated_shc)
+lipid_aggregated_shc[] <- lapply(lipid_aggregated_shc, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(lipid_aggregated_shc, class)
+lipid_aggregated_shc[is.na(lipid_aggregated_shc)] <- 0
+
+#delete column with 0
+#both_pca <- both_pca[, !(colnames(both_pca) %in% c("PC [36:4]"))]
+
+prin_comp_wttwmp <- prcomp(lipid_aggregated_shc, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = lipid_shc.types,
+              groups = lipid_shc.types,
+            ellipse = TRUE)
+g <- g + scale_color_discrete(name = '')
+
+g <- g + theme(legend.position = "none")
+
+print(g)
+
+
+
+```
+
+make a pca of metoh wt without hopanoids!!!!
+```{r}
+pca_wt_met <- raw_WT
+
+#only temp
+pca_wt_met <- pca_wt_met%>% select(WT, length, DB, starts_with("Met")) %>%tbl_df
+
+pca_wt_met <- pca_wt_met[1:25,]
+pca_wt_met <- t(pca_wt_met) #transpose df
+colnames(pca_wt_met) <- pca_wt_met[1,] #first row as column name
+pca_wt_met <- pca_wt_met[-1,]  #delete frist column
+pca_wt_met[is.na(pca_wt_met)] <- 0
+
+
+str(pca_wt_met)
+typeof(pca_wt_met)
+pca_wt_met<-as.data.frame(pca_wt_met) #change to df
+
+str(pca_wt_met)
+
+
+pca_wt_met[] <- lapply(pca_wt_met, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(pca_wt_met, class)
+pca_wt_met[is.na(pca_wt_met)] <- 0
+```
+
+```{r}
+
+library(ggbiplot)
+str(pca_wt_met) 
+
+pca <- pca_wt_met[3:8,]
+#row.names(pca) <- sub("X","",wt_temp$replicate)
+pca_wt_met.types <- rownames(pca)
+pca_wt_met.types<-sub("\\d{1}$","",pca_wt_met.types)
+pca_wt_met.types<-sub("\\.$","",pca_wt_met.types) #remomve dot at the end
+
+#delete column with 0
+#pca <- pca[, !(colnames(pca) %in% c("PC [36:4]"))]
+prin_comp_wttwmp <- prcomp(pca, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels  = pca_wt_met.types,
+              groups = pca_wt_met.types, ellipse = TRUE)
+g <- g + scale_color_discrete(name = '') +
+  scale_x_continuous(limits = c(-8, 8)) +
+  scale_y_continuous(limits = c(-8, 8))
+
+g <- g + theme(legend.position = "none")
+print(g)
+```
+
+
+WT temp- aligned dataset!
+```{r}
+both<-read.csv(file='Desktop/both_wt_shc.csv',sep=';')
+names(both)
+both_temp <- both %>% select(type,lipids, length, DB, starts_with("X"), starts_with("early")) %>% tbl_df #only temp
+
+wt_align_temp <- filter(both_temp, type == 'WT') #take only WT
+
+wt_align_temp <- t(wt_align_temp) #transpose df
+colnames(wt_align_temp) <- wt_align_temp[2,] #first row as column name
+wt_align_temp <- wt_align_temp[-2,]  #delete frist column
+
+typeof(wt_align_temp)
+wt_align_temp<-as.data.frame(wt_align_temp) #change to df
+
+str(wt_align_temp)
+
+
+wt_align_temp <- wt_align_temp[4:12,]
+str(wt_align_temp)
+wt_align_temp[] <- lapply(wt_align_temp, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(wt_align_temp, class)
+wt_align_temp[is.na(wt_align_temp)] <- 0
+
+
+
+```
+
+
+```{r}
+library(ggbiplot)
+
+str(pca_both_temp) 
+
+wt_align_temp.types <- rownames(wt_align_temp)
+wt_align_temp.types<-sub("\\d{1}$","",wt_align_temp.types)
+wt_align_temp.types<-sub("\\.$","",wt_align_temp.types) #remomve dot at the end
+wt_align_temp.types<-sub("X","",wt_align_temp.types)
+wt_align_temp.types <- sub("early","30C",wt_align_temp.types )
+prin_comp_both <- prcomp(wt_align_temp, scale. = T)
+names(prin_comp_both)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_both$center #outputs the mean of variables
+prin_comp_both$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_both$rotation
+
+plot(prin_comp_both, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_both, obs.scale = 1,
+              labels  = wt_align_temp.types,
+              groups =  wt_align_temp.types, varname.size=2, ellipse = TRUE)
+g <- g + scale_color_discrete(name = '') +
+          scale_x_continuous(limits = c(-8, 8)) +
+          scale_y_continuous(limits = c(-8, 8))
+
+g <- g + theme(legend.position = "none") + theme_bw()
+print(g)
+```
+
+
+WT temp- aligned dataset! without 13C.1
+```{r}
+both<-read.csv(file='Desktop/both_wt_shc.csv',sep=';')
+names(both)
+both_temp <- both %>% select(type,lipids, length, DB, starts_with("X"), starts_with("early") , -X13C.1) %>% tbl_df #only temp
+
+wt_align_temp <- filter(both_temp, type == 'WT') #take only WT
+
+wt_align_temp <- t(wt_align_temp) #transpose df
+colnames(wt_align_temp) <- wt_align_temp[2,] #first row as column name
+wt_align_temp <- wt_align_temp[-2,]  #delete frist column
+
+typeof(wt_align_temp)
+wt_align_temp<-as.data.frame(wt_align_temp) #change to df
+
+str(wt_align_temp)
+
+
+wt_align_temp <- wt_align_temp[4:11,]
+str(wt_align_temp)
+wt_align_temp[] <- lapply(wt_align_temp, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(wt_align_temp, class)
+wt_align_temp[is.na(wt_align_temp)] <- 0
+
+
+ggplot()
+```
+
+
+```{r}
+library(ggbiplot)
+
+wt_align_temp.types <- rownames(wt_align_temp)
+wt_align_temp.types<-sub("\\d{1}$","",wt_align_temp.types)
+wt_align_temp.types<-sub("\\.$","",wt_align_temp.types) #remomve dot at the end
+wt_align_temp.types<-sub("X","",wt_align_temp.types)
+wt_align_temp.types <- sub("early","30C",wt_align_temp.types )
+prin_comp_both <- prcomp(wt_align_temp, scale. = T)
+names(prin_comp_both)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_both$center #outputs the mean of variables
+prin_comp_both$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_both$rotation
+
+plot(prin_comp_both, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_both, obs.scale = 1,
+              labels  = wt_align_temp.types,
+              groups =  wt_align_temp.types, varname.size=2, ellipse = TRUE)
+g <- g + scale_color_discrete(name = '') +
+          scale_x_continuous(limits = c(-8, 8)) +
+          scale_y_continuous(limits = c(-8, 8))
+
+g <- g + theme(legend.position = "none") + theme_bw()
+print(g)
+```
+
+
+shc- aligned temp
+```{r}
+both<-read.csv(file='Desktop/both_wt_shc.csv',sep=';')
+names(both)
+both_temp <- both %>% select(type,lipids, length, DB, starts_with("X"), starts_with("early")) %>% tbl_df #only temp
+
+shc_align_temp <- filter(both_temp, type == 'SHC') #take only WT
+
+shc_align_temp <- t(shc_align_temp) #transpose df
+colnames(shc_align_temp) <- shc_align_temp[2,] #first row as column name
+shc_align_temp <- shc_align_temp[-2,]  #delete frist column
+
+typeof(shc_align_temp)
+shc_align_temp<-as.data.frame(shc_align_temp) #change to df
+
+str(shc_align_temp)
+
+
+shc_align_temp <- shc_align_temp[4:12,]
+str(shc_align_temp)
+shc_align_temp[] <- lapply(shc_align_temp, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(shc_align_temp, class)
+shc_align_temp[is.na(shc_align_temp)] <- 0
+
+
+
+```
+
+
+```{r}
+library(ggbiplot)
+
+
+shc_align_temp.types <- rownames(shc_align_temp)
+shc_align_temp.types<-sub("\\d{1}$","",shc_align_temp.types)
+shc_align_temp.types<-sub("\\.$","",shc_align_temp.types) #remomve dot at the end
+shc_align_temp.types<-sub("X","",shc_align_temp.types)
+shc_align_temp.types <- sub("early","30C",shc_align_temp.types )
+prin_comp_both <- prcomp(shc_align_temp, scale. = T)
+names(prin_comp_both)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_both$center #outputs the mean of variables
+prin_comp_both$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_both$rotation
+
+plot(prin_comp_both, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_both, obs.scale = 1,
+              labels  = wt_align_temp.types,
+              groups =  wt_align_temp.types, varname.size=2, ellipse = TRUE)
+g <- g + scale_color_discrete(name = '') +
+          scale_x_continuous(limits = c(-8, 8)) +
+          scale_y_continuous(limits = c(-8, 8))
+
+g <- g + theme(legend.position = "none") + theme_bw()
+print(g)
+```
+
+shc + wt - aligned temp
+```{r}
+both<-read.csv(file='Desktop/all_data_wtshc.csv',sep=';')
+names(both)
+both_temp <- both %>% select(type,lipids, length, DB, starts_with("X"), starts_with("early"), -X13C.1) %>% tbl_df #only temp
+both_temp <-  unite(both_temp,lipids, type,col = "lipids type", sep = "_")
+align_temp <- t(both_temp) #transpose df
+colnames(align_temp) <- align_temp[1,] #first row as column name
+align_temp <- align_temp[-1,]  #delete frist column
+
+typeof(align_temp)
+align_temp<-as.data.frame(align_temp) #change to df
+
+str(align_temp)
+
+
+align_temp <- align_temp[3:19,]
+str(align_temp)
+align_temp[] <- lapply(align_temp, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(align_temp, class)
+align_temp[is.na(align_temp)] <- 0
+
+
+```
+
+```{r}
+library(ggbiplot)
+
+align_temp.types <- rownames(align_temp)
+align_temp.types<-sub("\\d{1}$","",align_temp.types)
+align_temp.types<-sub("\\.$","",align_temp.types) #remomve dot at the end
+align_temp.types<-sub("X","",align_temp.types)
+align_temp.types <- sub("early","30C",align_temp.types )
+align_temp.types <- sub("30C1_shc","30C_shc",align_temp.types )
+prin_comp_both <- prcomp(align_temp, scale. = T)
+names(prin_comp_both)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_both$center #outputs the mean of variables
+prin_comp_both$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+
+
+plot(prin_comp_both, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_both, obs.scale = 1,
+              labels  = align_temp.types,
+              groups =  align_temp.types, varname.size=2, ellipse = TRUE)
+g <- g + scale_color_discrete(name = '')+
+          scale_x_continuous(limits = c(-8, 8)) +
+          scale_y_continuous(limits = c(-8, 8))
+
+g <- g + theme(legend.position = "none") + theme_bw() 
+print(g)
+```
+
+
+db for wt - TEMP
+```{r}
+type_wt <- align_wt_shc
+type_wt[is.na(type_wt)] <- 0
+type_wt <- filter(type_wt, type == "WT")
+type_wt <-  separate(type_wt,lipids, into = c("lipid", "lenDB"),sep =  " ")
+lipid_wt<- select(type_wt, starts_with("X"), starts_with("early"), DB, -X13C.1)
+lipid_wt[] <- lapply(lipid_wt, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(lipid_wt, class)
+str(lipid_wt)
+lipid_wt<-as.data.frame(lipid_wt)
+
+library("plyr")
+lipid_aggregated_wt <- ddply(lipid_wt, .(DB), colwise(sum))
+
+lipid_aggregated_wt <- t(lipid_aggregated_wt) #transpose df
+colnames(lipid_aggregated_wt) <- lipid_aggregated_wt[1,] #first row as column name
+lipid_aggregated_wt <- lipid_aggregated_wt[-1,]  #delete frist column
+
+lipid_wt.types <- rownames(lipid_aggregated_wt)
+lipid_wt.types<-sub("X","",lipid_wt.types)
+lipid_wt.types<-sub("\\d{1}$","",lipid_wt.types)
+lipid_wt.types<-sub("\\.$","",lipid_wt.types) #remomve dot at the end
+lipid_wt.types<-sub("early","30C",lipid_wt.types)
+                    
+lipid_aggregated_wt<-as.data.frame(lipid_aggregated_wt)
+lipid_aggregated_wt[] <- lapply(lipid_aggregated_wt, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(lipid_aggregated_wt, class)
+lipid_aggregated_wt[is.na(lipid_aggregated_wt)] <- 0
+#delete column with 0
+#both_pca <- both_pca[, !(colnames(both_pca) %in% c("PC [36:4]"))]
+
+
+prin_comp_wttwmp <- prcomp(lipid_aggregated_wt, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = lipid_wt.types,
+              groups = lipid_wt.types,
+              ellipse = TRUE)
+g <- g + scale_color_discrete(name = '')+
+          scale_x_continuous(limits = c(-3, 3)) +
+          scale_y_continuous(limits = c(-1, 1))
+
+
+g <- g + theme(legend.position = "none") + theme_bw()
+
+print(g)
+
+
+
+```
+
+db for shc - TEMP alaigned
+```{r}
+type_shc <- align_wt_shc
+type_shc[is.na(type_shc)] <- 0
+type_shc <- filter(type_shc, type == "SHC")
+type_shc <-  separate(type_shc,lipids, into = c("lipid", "lenDB"),sep =  " ")
+lipid_shc<- select(type_shc, starts_with("X"), starts_with("early"), DB)
+lipid_shc[] <- lapply(lipid_shc, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(lipid_shc, class)
+str(lipid_shc)
+lipid_shc<-as.data.frame(lipid_shc)
+
+library("plyr")
+lipid_aggregated_shc <- ddply(lipid_shc, .(DB), colwise(sum))
+
+lipid_aggregated_shc <- t(lipid_aggregated_shc) #transpose df
+colnames(lipid_aggregated_shc) <- lipid_aggregated_shc[1,] #first row as column name
+lipid_aggregated_shc <- lipid_aggregated_shc[-1,]  #delete frist column
+
+lipid_shc.types <- rownames(lipid_aggregated_shc)
+lipid_shc.types<-sub("X","",lipid_shc.types)
+lipid_shc.types<-sub("\\d{1}$","",lipid_shc.types)
+lipid_shc.types<-sub("\\.$","",lipid_shc.types) #remomve dot at the end
+lipid_shc.types<-sub("early","30C",lipid_shc.types)
+                    
+lipid_aggregated_shc<-as.data.frame(lipid_aggregated_shc)
+lipid_aggregated_shc[] <- lapply(lipid_aggregated_shc, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(lipid_aggregated_shc, class)
+lipid_aggregated_shc[is.na(lipid_aggregated_shc)] <- 0
+#delete column with 0
+#both_pca <- both_pca[, !(colnames(both_pca) %in% c("PC [36:4]"))]
+
+
+prin_comp_wttwmp <- prcomp(lipid_aggregated_shc, scale. = T)
+names(prin_comp_wttwmp)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_wttwmp$center #outputs the mean of variables
+prin_comp_wttwmp$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+prin_comp_wttwmp$rotation
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = lipid_shc.types,
+              groups = lipid_shc.types,
+              ellipse = TRUE)
+g <- g + scale_color_discrete(name = '')+
+          scale_x_continuous(limits = c(-3, 3)) +
+          scale_y_continuous(limits = c(-1, 1))
+
+g <- g + theme(legend.position = "none") + theme_bw()
+
+print(g)
+
+
+
+```
+
+
+```{r}
+both<-read.csv(file='Desktop/all_data_wtshc.csv',sep=';')
+names(both)
+both_gs <- both %>% select(type,lipids, length, DB, starts_with("late"), starts_with("early"),starts_with("mid"),starts_with("stat"), -X13C.1) %>% tbl_df #only temp
+both_gs <-  unite(both_gs,lipids, type,col = "lipids type", sep = "_")
+align_gs <- t(both_gs) #transpose df
+colnames(align_gs) <- align_gs[1,] #first row as column name
+align_gs <- align_gs[-1,]  #delete frist column
+
+typeof(align_gs)
+align_gs<-as.data.frame(align_gs) #change to df
+
+str(align_gs)
+
+
+align_gs <- align_gs[3:26,]
+str(align_gs)
+align_gs[] <- lapply(align_gs, function(x) {
+    if(is.factor(x)) as.numeric(as.character(x)) else x ###convert factor to numeric
+})
+sapply(align_gs, class)
+align_gs[is.na(align_gs)] <- 0
+
+library(ggbiplot)
+
+align_gs.types <- rownames(align_gs)
+align_gs.types<-sub("\\d{1}$","",align_gs.types)
+align_gs.types<-sub("\\.$","",align_gs.types) #remomve dot at the end
+align_gs.types<-sub("X","",align_gs.types)
+align_gs.types <- sub("early","30C",align_gs.types )
+align_gs.types <- sub("30C1_shc","30C_shc",align_gs.types )
+drops <- c("PC [36:4]_WT", "PC [34:4]_SHC", "PC [36:4]_SHC")
+align_gs <-align_gs[ , !(names(align_gs) %in% drops)]
+prin_comp_both <- prcomp(align_gs, scale. = T)
+names(prin_comp_both)
+#center and scale refers to respective mean and standard deviation of the variables that are used for normalization prior to implementing PCA
+prin_comp_both$center #outputs the mean of variables
+prin_comp_both$scale #outputs the standard deviation of variables
+#The rotation measure provides the principal component loading. Each column of rotation matrix contains the principal component loading vector. This is the most important measure we should be interested in.
+
+
+plot(prin_comp_both, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_both, obs.scale = 1,
+              labels  = align_gs.types,
+              groups =  align_gs.types, varname.size=2, ellipse = TRUE)
+g <- g + scale_color_discrete(name = '')
+
+g <- g + theme(legend.position = "none") + theme_bw() 
+print(g)
+```
+
+alignt temp - db
+```{r}
+
+wt_sh_aligned <- read.xls("Desktop/Lipidomic/Mext_Lipidome_Feb2017.xlsx", sheet = 3, header = TRUE)
+wt_sh_aligned[is.na(wt_sh_aligned)] <- 0
+wt_sh_aligned_m <- wt_sh_aligned  %>% select(starts_with("X"), starts_with("early"), type, DB)
+db_only <-wt_sh_aligned_m %>% group_by(type, DB) %>% summarise_each(funs(sum))
+db_only_gather <- gather(db_only, replicate, membr_perc, -one_of("DB", "type"))
+db_only_gather <-  unite(db_only_gather, type,replicate,col = "con_type", sep = "_")
+
+#con_type as a col names
+#db_only_gather$con_type <- make.names(db_only_gather$con_type, unique=TRUE)
+
+db_only_gather <- spread(db_only_gather, DB, membr_perc)
+rownames(db_only_gather) <- db_only_gather$con_type
+db_only_gather<- db_only_gather%>% separate(con_type, into = c("type", "con"),sep =  "_")
+db_only_gather$con <- make.names(db_only_gather$con, unique=TRUE)
+rownames(db_only_gather) <- db_only_gather$con
+db_only_gather <- select(db_only_gather,-con)
+db_only.type <- db_only_gather$type
+
+lipid.com <- rownames(db_only_gather)
+lipid.com<-sub("X","",lipid.com)
+lipid.com<-sub("\\d{1}$","",lipid.com)
+lipid.com<-sub("\\.$","",lipid.com) #remomve dot at the end
+
+
+prin_comp_wttwmp <- prcomp(db_only_gather[,2:6], scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = lipid.com,
+              groups =db_only_gather$type )
+g <- g + scale_color_discrete(name = '')
+
+g <- g + theme(legend.position = "none")
+
+print(g)
+
+
+
+```
+alignt temp - class
+```{r}
+
+wt_sh_aligned <- read.xls("Desktop/Lipidomic/Mext_Lipidome_Feb2017.xlsx", sheet = 3, header = TRUE)
+wt_sh_aligned[is.na(wt_sh_aligned)] <- 0
+wt_sh_aligned_l <- wt_sh_aligned  %>% select(starts_with("X"), starts_with("early"), type, lipids)
+wt_sh_aligned_l<-wt_sh_aligned_l%>%separate(lipids, into = c("class", "bal"),sep =  " ")
+wt_sh_aligned_l <- select(wt_sh_aligned_l, -bal)
+lip_only <-wt_sh_aligned_l %>% group_by(type, class) %>% summarise_each(funs(sum))
+lip_only_gather <- gather(lip_only, replicate, membr_perc, -one_of("class", "type"))
+lip_only_gather <-  unite(lip_only_gather, type,replicate,col = "con_type", sep = "_")
+
+#con_type as a col names
+#db_only_gather$con_type <- make.names(db_only_gather$con_type, unique=TRUE)
+
+lip_only_gather <- spread(lip_only_gather, class, membr_perc)
+rownames(lip_only_gather) <- lip_only_gather$con_type
+lip_only_gather<- lip_only_gather%>% separate(con_type, into = c("type", "con"),sep =  "_")
+lip_only_gather$con <- make.names(lip_only_gather$con, unique=TRUE)
+rownames(lip_only_gather) <- lip_only_gather$con
+lip_only_gather <- select(lip_only_gather,-con)
+
+
+lipid.com <- rownames(lip_only_gather)
+lipid.com<-sub("X","",lipid.com)
+lipid.com<-sub("\\d{1}$","",lipid.com)
+lipid.com<-sub("\\.$","",lipid.com) #remomve dot at the end
+
+
+prin_comp_wttwmp <- prcomp(lip_only_gather[,2:5], scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = lipid.com,
+              groups =lip_only_gather$type )
+g <- g + scale_color_discrete(name = '')
+
+g <- g + theme(legend.position = "none")
+
+print(g)
+
+
+
+```
+
+
+alignt all- - class
+```{r}
+
+wt_sh_aligned <- read.xls("Desktop/Lipidomic/Mext_Lipidome_Feb2017.xlsx", sheet = 3, header = TRUE)
+wt_sh_aligned[is.na(wt_sh_aligned)] <- 0
+wt_sh_aligned_all <- wt_sh_aligned  %>% select(-c ( DB, length, X13C.1, pH.6.3))
+wt_sh_aligned_all<-wt_sh_aligned_all%>%separate(lipids, into = c("class", "bal"),sep =  " ")
+wt_sh_aligned_all <- select(wt_sh_aligned_all, -bal)
+lip_all <-wt_sh_aligned_all %>% group_by(type, class) %>% summarise_each(funs(sum))
+lip_all_gather <- gather(lip_all, replicate, membr_perc, -one_of("class", "type"))
+lip_all_gather <-  unite(lip_all_gather, type,replicate,col = "con_type", sep = "_")
+
+#con_type as a col names
+#db_only_gather$con_type <- make.names(db_only_gather$con_type, unique=TRUE)
+
+lip_all_gather <- spread(lip_all_gather, class, membr_perc)
+rownames(lip_all_gather) <- lip_all_gather$con_type
+lip_all_gather<- lip_all_gather%>% separate(con_type, into = c("type", "con"),sep =  "_")
+lip_all_gather$con <- make.names(lip_all_gather$con, unique=TRUE)
+rownames(lip_all_gather) <- lip_all_gather$con
+lip_all_gather <- select(lip_all_gather,-con)
+
+
+
+lipid.all <- rownames(lip_all_gather)
+lipid.all<-sub("\\.1","",lipid.all)
+lipid.all<-sub("X","",lipid.all)
+lipid.all<-sub("\\d{1}$","",lipid.all)
+lipid.all<-sub("\\.$","",lipid.all) #remomve dot at the end
+
+prin_comp_wttwmp <- prcomp(lip_all_gather[,2:5], scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = lipid.all,
+              groups =factor(lip_all_gather$type) )
+g <- g + scale_color_discrete(name = '')
+
+ 
+g <- g +  theme(legend.direction = 'horizontal', legend.position = 'top') + theme_bw()
+
+print(g)
+
+
+
+```
+
+alignt temp - class
+```{r}
+
+wt_sh_aligned <- read.xls("Desktop/Lipidomic/Mext_Lipidome_Feb2017.xlsx", sheet = 3, header = TRUE)
+wt_sh_aligned[is.na(wt_sh_aligned)] <- 0
+wt_sh_aligned_temp <- wt_sh_aligned  %>% select( starts_with("X"),starts_with("early"),type, lipids,-X13C.1)
+wt_sh_aligned_temp<-wt_sh_aligned_temp%>%separate(lipids, into = c("class", "bal"),sep =  " ")
+wt_sh_aligned_temp <- select(wt_sh_aligned_temp, -bal)
+lip_temp <-wt_sh_aligned_temp %>% group_by(type, class) %>% summarise_each(funs(sum))
+lip_temp_gather <- gather(lip_temp, replicate, membr_perc, -one_of("class", "type"))
+lip_temp_gather <-  unite(lip_temp_gather, type,replicate,col = "con_type", sep = "_")
+
+#con_type as a col names
+#db_only_gather$con_type <- make.names(db_only_gather$con_type, unique=TRUE)
+
+lip_temp_gather <- spread(lip_temp_gather, class, membr_perc)
+rownames(lip_temp_gather) <- lip_temp_gather$con_type
+lip_temp_gather<- lip_temp_gather%>% separate(con_type, into = c("type", "con"),sep =  "_")
+lip_temp_gather$con <- make.names(lip_temp_gather$con, unique=TRUE)
+rownames(lip_temp_gather) <- lip_temp_gather$con
+lip_temp_gather <- select(lip_temp_gather,-con)
+
+
+
+lipid.temp <- rownames(lip_temp_gather)
+lipid.temp<-sub("\\.1","",lipid.temp)
+lipid.temp<-sub("X","",lipid.temp)
+lipid.temp<-sub("\\d{1}$","",lipid.temp)
+lipid.temp<-sub("\\.$","",lipid.temp) #remomve dot at the end
+lipid.temp<-sub("early","30C",lipid.temp)
+
+prin_comp_wttwmp <- prcomp(lip_temp_gather[,2:5], scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = lipid.temp,
+              groups =factor(lip_temp_gather$type) )
+g <- g + scale_color_discrete(name = '')
+
+ 
+g <- g +  theme(legend.direction = 'horizontal', legend.position = 'top') + theme_bw() +
+          scale_x_continuous(limits = c(-4, 4)) +
+          scale_y_continuous(limits = c(-4, 4))
+
+print(g)
+```
+
+alignt temp - db
+```{r}
+
+wt_sh_aligned <- read.xls("Desktop/Lipidomic/Mext_Lipidome_Feb2017.xlsx", sheet = 3, header = TRUE)
+wt_sh_aligned[is.na(wt_sh_aligned)] <- 0
+wt_sh_aligned_db <- wt_sh_aligned  %>% select( starts_with("X"),starts_with("early"),type, DB,-X13C.1)
+#wt_sh_aligned_temp<-wt_sh_aligned_temp%>%separate(lipids, into = c("class", "bal"),sep =  " ")
+#wt_sh_aligned_temp <- select(wt_sh_aligned_temp, -bal)
+lip_db <-wt_sh_aligned_temp %>% group_by(type, DB) %>% summarise_each(funs(sum))
+lip_db_gather <- gather(lip_db, replicate, membr_perc, -one_of("DB", "type"))
+#lip_db_gather <-  unite(lip_db_gather, type,replicate,col = "con_type", sep = "_")
+
+#con_type as a col names
+#db_only_gather$con_type <- make.names(db_only_gather$con_type, unique=TRUE)
+
+lip_db_gather <- spread(lip_db_gather, DB, membr_perc)
+#rownames(lip_db_gather) <- lip_db_gather$con_type
+#lip_temp_gather<- lip_temp_gather%>% separate(con_type, into = c("type", "con"),sep =  "_")
+lip_db_gather$replicate <- make.names(lip_db_gather$replicate, unique=TRUE)
+rownames(lip_db_gather) <- lip_db_gather$replicate
+lip_db_gather <- select(lip_db_gather,-replicate)
+
+
+
+lipid.db <- rownames(lip_db_gather)
+lipid.db<-sub("\\.1","",lipid.db)
+lipid.db<-sub("X","",lipid.db)
+lipid.db<-sub("\\d{1}$","",lipid.db)
+lipid.db<-sub("\\.$","",lipid.db) #remomve dot at the end
+lipid.db<-sub("early","30C",lipid.db)
+
+prin_comp_wttwmp <- prcomp(lip_db_gather[,2:6], scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = lipid.db,
+              groups =factor(lip_db_gather$type) )
+g <- g + scale_color_discrete(name = '') +
+          scale_x_continuous(limits = c(-4, 4)) +
+          scale_y_continuous(limits = c(-4, 4))
+
+ 
+g <- g +  theme(legend.direction = 'horizontal', legend.position = 'top') + theme_bw()
+
+print(g)
+
+
+
+```
+
+alignt temp - db
+```{r}
+
+wt_sh_aligned <- read.xls("Desktop/Lipidomic/Mext_Lipidome_Feb2017.xlsx", sheet = 3, header = TRUE)
+wt_sh_aligned[is.na(wt_sh_aligned)] <- 0
+wt_sh_aligned_db <- wt_sh_aligned  %>% select( starts_with("X"),starts_with("early"),type, DB,-X13C.1)
+#wt_sh_aligned_temp<-wt_sh_aligned_temp%>%separate(lipids, into = c("class", "bal"),sep =  " ")
+#wt_sh_aligned_temp <- select(wt_sh_aligned_temp, -bal)
+lip_db <-wt_sh_aligned_db %>% group_by(type, DB) %>% summarise_all(funs(sum))
+lip_db_gather <- gather(lip_db, replicate, membr_perc, -one_of("DB", "type"))
+#lip_db_gather <-  unite(lip_db_gather, type,replicate,col = "con_type", sep = "_")
+
+#con_type as a col names
+#db_only_gather$con_type <- make.names(db_only_gather$con_type, unique=TRUE)
+
+lip_db_gather <- spread(lip_db_gather, DB, membr_perc)
+#rownames(lip_db_gather) <- lip_db_gather$con_type
+#lip_temp_gather<- lip_temp_gather%>% separate(con_type, into = c("type", "con"),sep =  "_")
+lip_db_gather$replicate <- make.names(lip_db_gather$replicate, unique=TRUE)
+rownames(lip_db_gather) <- lip_db_gather$replicate
+lip_db_gather <- select(lip_db_gather,-replicate)
+
+
+
+lipid.db <- rownames(lip_db_gather)
+lipid.db<-sub("\\.1","",lipid.db)
+lipid.db<-sub("X","",lipid.db)
+lipid.db<-sub("\\d{1}$","",lipid.db)
+lipid.db<-sub("\\.$","",lipid.db) #remomve dot at the end
+lipid.db<-sub("early","30C",lipid.db)
+
+prin_comp_wttwmp <- prcomp(lip_db_gather[,2:6], scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = lipid.db,
+              groups =factor(lip_db_gather$type) )
+g <- g + scale_color_discrete(name = '') +
+          scale_x_continuous(limits = c(-4, 4)) +
+          scale_y_continuous(limits = c(-4, 4))
+
+ 
+g <- g +  theme(legend.direction = 'horizontal', legend.position = 'top') + theme_bw()
+
+print(g)
+
+
+
+```
+
+
+alignt temp - cl
+```{r}
+wt_sh_aligned <- read.xls("Desktop/Lipidomic/Mext_Lipidome_Feb2017.xlsx", sheet = 3, header = TRUE)
+wt_sh_aligned[is.na(wt_sh_aligned)] <- 0
+wt_sh_aligned_cl <- wt_sh_aligned  %>% select( starts_with("X"),starts_with("early"),type, length,-X13C.1)
+#wt_sh_aligned_temp<-wt_sh_aligned_temp%>%separate(lipids, into = c("class", "bal"),sep =  " ")
+#wt_sh_aligned_temp <- select(wt_sh_aligned_temp, -bal)
+lip_cl <-wt_sh_aligned_cl %>% group_by(type, length) %>% summarise_all(funs(sum))
+lip_cl_gather <- gather(lip_cl, replicate, membr_perc, -one_of("length", "type"))
+#lip_db_gather <-  unite(lip_db_gather, type,replicate,col = "con_type", sep = "_")
+
+#con_type as a col names
+#db_only_gather$con_type <- make.names(db_only_gather$con_type, unique=TRUE)
+
+lip_cl_gather <- spread(lip_cl_gather, length, membr_perc)
+#rownames(lip_db_gather) <- lip_db_gather$con_type
+#lip_temp_gather<- lip_temp_gather%>% separate(con_type, into = c("type", "con"),sep =  "_")
+lip_cl_gather$replicate <- make.names(lip_cl_gather$replicate, unique=TRUE)
+rownames(lip_cl_gather) <- lip_cl_gather$replicate
+lip_cl_gather <- select(lip_cl_gather,-replicate)
+
+
+
+lipid.cl <- rownames(lip_cl_gather)
+lipid.cl<-sub("\\.1","",lipid.cl)
+lipid.cl<-sub("X","",lipid.cl)
+lipid.cl<-sub("\\d{1}$","",lipid.cl)
+lipid.cl<-sub("\\.$","",lipid.cl) #remomve dot at the end
+lipid.cl<-sub("early","30C",lipid.cl)
+
+prin_comp_wttwmp <- prcomp(lip_cl_gather[,2:8], scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = lipid.cl,
+              groups =factor(lip_cl_gather$type) )
+g <- g + scale_color_discrete(name = '')  +
+          scale_x_continuous(limits = c(-4, 4)) +
+          scale_y_continuous(limits = c(-4, 4))
+
+ 
+g <- g +  theme(legend.direction = 'horizontal', legend.position = 'top') + theme_bw()
+
+print(g)
+```
+
+WT alignt temp - cl
+```{r}
+wt_sh_aligned <- read.xls("Desktop/Lipidomic/Mext_Lipidome_Feb2017.xlsx", sheet = 3, header = TRUE)
+wt_sh_aligned[is.na(wt_sh_aligned)] <- 0
+wt_aligned_cl <- wt_sh_aligned  %>% filter(type=="WT")
+wt_aligned_cl <- wt_aligned_cl  %>% select( starts_with("X"),starts_with("early"),type, length,-X13C.1)
+#wt_sh_aligned_temp<-wt_sh_aligned_temp%>%separate(lipids, into = c("class", "bal"),sep =  " ")
+#wt_sh_aligned_temp <- select(wt_sh_aligned_temp, -bal)
+wt_cl <-wt_aligned_cl %>% group_by(type, length) %>% summarise_all(funs(sum))
+wt_cl_gather <- gather(wt_cl, replicate, membr_perc, -one_of("length", "type"))
+#lip_db_gather <-  unite(lip_db_gather, type,replicate,col = "con_type", sep = "_")
+
+#con_type as a col names
+#db_only_gather$con_type <- make.names(db_only_gather$con_type, unique=TRUE)
+
+wt_cl_gather <- spread(wt_cl_gather, length, membr_perc)
+#rownames(lip_db_gather) <- lip_db_gather$con_type
+#lip_temp_gather<- lip_temp_gather%>% separate(con_type, into = c("type", "con"),sep =  "_")
+wt_cl_gather$replicate <- make.names(wt_cl_gather$replicate, unique=TRUE)
+rownames(wt_cl_gather) <- wt_cl_gather$replicate
+wt_cl_gather <- select(wt_cl_gather,-replicate)
+
+
+
+wt.cl <- rownames(wt_cl_gather)
+wt.cl<-sub("\\.1","",wt.cl)
+wt.cl<-sub("X","",wt.cl)
+wt.cl<-sub("\\d{1}$","",wt.cl)
+wt.cl<-sub("\\.$","",wt.cl) #remomve dot at the end
+wt.cl<-sub("early","30C",wt.cl)
+
+prin_comp_wttwmp <- prcomp(wt_cl_gather[,2:8], scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = wt.cl,
+              groups = wt.cl )
+g <- g + scale_color_discrete(name = '')  +
+          scale_x_continuous(limits = c(-4, 4)) +
+          scale_y_continuous(limits = c(-4, 4))
+
+ 
+g <- g +  theme(legend.direction = 'horizontal', legend.position = 'top') + theme_bw()
+
+print(g)
+```
+
+SHC alignt temp - cl
+```{r}
+wt_sh_aligned <- read.xls("Desktop/Lipidomic/Mext_Lipidome_Feb2017.xlsx", sheet = 3, header = TRUE)
+wt_sh_aligned[is.na(wt_sh_aligned)] <- 0
+shc_aligned_cl <- wt_sh_aligned  %>% filter(type=="SHC")
+shc_aligned_cl <- shc_aligned_cl  %>% select( starts_with("X"),starts_with("early"),type, length,-X13C.1)
+#wt_sh_aligned_temp<-wt_sh_aligned_temp%>%separate(lipids, into = c("class", "bal"),sep =  " ")
+#wt_sh_aligned_temp <- select(wt_sh_aligned_temp, -bal)
+shc_cl <-shc_aligned_cl %>% group_by(type, length) %>% summarise_all(funs(sum))
+shc_cl_gather <- gather(shc_cl, replicate, membr_perc, -one_of("length", "type"))
+#lip_db_gather <-  unite(lip_db_gather, type,replicate,col = "con_type", sep = "_")
+
+#con_type as a col names
+#db_only_gather$con_type <- make.names(db_only_gather$con_type, unique=TRUE)
+
+shc_cl_gather <- spread(shc_cl_gather, length, membr_perc)
+#rownames(lip_db_gather) <- lip_db_gather$con_type
+#lip_temp_gather<- lip_temp_gather%>% separate(con_type, into = c("type", "con"),sep =  "_")
+shc_cl_gather$replicate <- make.names(shc_cl_gather$replicate, unique=TRUE)
+rownames(shc_cl_gather) <- shc_cl_gather$replicate
+shc_cl_gather <- select(shc_cl_gather,-replicate)
+
+
+
+shc.cl <- rownames(shc_cl_gather)
+shc.cl<-sub("\\.1","",shc.cl)
+shc.cl<-sub("X","",shc.cl)
+shc.cl<-sub("\\d{1}$","",shc.cl)
+shc.cl<-sub("\\.$","",shc.cl) #remomve dot at the end
+shc.cl<-sub("early","30C",shc.cl)
+
+prin_comp_wttwmp <- prcomp(shc_cl_gather[,2:8], scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = shc.cl,
+              groups = shc.cl )
+g <- g + scale_color_discrete(name = '')  +
+          scale_x_continuous(limits = c(-4, 4)) +
+          scale_y_continuous(limits = c(-4, 4))
+
+ 
+g <- g +  theme(legend.direction = 'horizontal', legend.position = 'top') + theme_bw()
+
+print(g)
+```
+
+SHC alignt temp - db
+```{r}
+wt_sh_aligned <- read.xls("Desktop/Lipidomic/Mext_Lipidome_Feb2017.xlsx", sheet = 3, header = TRUE)
+wt_sh_aligned[is.na(wt_sh_aligned)] <- 0
+shc_aligned_db <- wt_sh_aligned  %>% filter(type=="SHC")
+shc_aligned_db <- shc_aligned_db  %>% select( starts_with("X"),starts_with("early"),type, DB,-X13C.1)
+#wt_sh_aligned_temp<-wt_sh_aligned_temp%>%separate(lipids, into = c("class", "bal"),sep =  " ")
+#wt_sh_aligned_temp <- select(wt_sh_aligned_temp, -bal)
+shc_db <-shc_aligned_db %>% group_by(type, DB) %>% summarise_all(funs(sum))
+shc_db_gather <- gather(shc_db, replicate, membr_perc, -one_of("DB", "type"))
+#lip_db_gather <-  unite(lip_db_gather, type,replicate,col = "con_type", sep = "_")
+
+#con_type as a col names
+#db_only_gather$con_type <- make.names(db_only_gather$con_type, unique=TRUE)
+
+shc_db_gather <- spread(shc_db_gather, DB, membr_perc)
+#rownames(lip_db_gather) <- lip_db_gather$con_type
+#lip_temp_gather<- lip_temp_gather%>% separate(con_type, into = c("type", "con"),sep =  "_")
+shc_db_gather$replicate <- make.names(shc_db_gather$replicate, unique=TRUE)
+rownames(shc_db_gather) <- shc_db_gather$replicate
+shc_db_gather <- select(shc_db_gather,-replicate)
+
+
+
+shc.db <- rownames(shc_db_gather)
+shc.db<-sub("\\.1","",shc.db)
+shc.db<-sub("X","",shc.db)
+shc.db<-sub("\\d{1}$","",shc.db)
+shc.db<-sub("\\.$","",shc.db) #remomve dot at the end
+shc.db<-sub("early","30C",shc.db)
+
+prin_comp_wttwmp <- prcomp(shc_db_gather[,2:6], scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = shc.db,
+              groups = shc.db )
+g <- g + scale_color_discrete(name = '')  +
+          scale_x_continuous(limits = c(-4, 4)) +
+          scale_y_continuous(limits = c(-4, 4))
+
+ 
+g <- g +  theme(legend.direction = 'horizontal', legend.position = 'top') + theme_bw()
+
+print(g)
+```
+
+WT alignt temp - db
+```{r}
+wt_sh_aligned <- read.xls("Desktop/Lipidomic/Mext_Lipidome_Feb2017.xlsx", sheet = 3, header = TRUE)
+wt_sh_aligned[is.na(wt_sh_aligned)] <- 0
+wt_aligned_db <- wt_sh_aligned  %>% filter(type=="WT")
+wt_aligned_db <- wt_aligned_db  %>% select( starts_with("X"),starts_with("early"),type, DB,-X13C.1)
+#wt_sh_aligned_temp<-wt_sh_aligned_temp%>%separate(lipids, into = c("class", "bal"),sep =  " ")
+#wt_sh_aligned_temp <- select(wt_sh_aligned_temp, -bal)
+wt_db <-wt_aligned_db %>% group_by(type, DB) %>% summarise_all(funs(sum))
+wt_db_gather <- gather(wt_db, replicate, membr_perc, -one_of("DB", "type"))
+#lip_db_gather <-  unite(lip_db_gather, type,replicate,col = "con_type", sep = "_")
+
+#con_type as a col names
+#db_only_gather$con_type <- make.names(db_only_gather$con_type, unique=TRUE)
+
+wt_db_gather <- spread(wt_db_gather, DB, membr_perc)
+#rownames(lip_db_gather) <- lip_db_gather$con_type
+#lip_temp_gather<- lip_temp_gather%>% separate(con_type, into = c("type", "con"),sep =  "_")
+wt_db_gather$replicate <- make.names(wt_db_gather$replicate, unique=TRUE)
+rownames(wt_db_gather) <- wt_db_gather$replicate
+wt_db_gather <- select(wt_db_gather,-replicate)
+
+
+
+wt.db <- rownames(wt_db_gather)
+wt.db<-sub("\\.1","",wt.db)
+wt.db<-sub("X","",wt.db)
+wt.db<-sub("\\d{1}$","",wt.db)
+wt.db<-sub("\\.$","",wt.db) #remomve dot at the end
+wt.db<-sub("early","30C",wt.db)
+
+prin_comp_wttwmp <- prcomp(wt_db_gather[,2:6], scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = wt.db,
+              groups = wt.db )
+g <- g + scale_color_discrete(name = '')  +
+          scale_x_continuous(limits = c(-4, 4)) +
+          scale_y_continuous(limits = c(-4, 4))
+
+ 
+g <- g +  theme(legend.direction = 'horizontal', legend.position = 'top') + theme_bw()
+
+print(g)
+```
+
+WT alignt temp - class
+```{r}
+wt_sh_aligned <- read.xls("Desktop/Lipidomic/Mext_Lipidome_Feb2017.xlsx", sheet = 3, header = TRUE)
+wt_sh_aligned[is.na(wt_sh_aligned)] <- 0
+wt_aligned_class <- wt_sh_aligned  %>% filter(type=="WT")
+wt_aligned_class <- wt_aligned_class  %>% select( starts_with("X"),starts_with("early"),type, lipids,-X13C.1)
+wt_aligned_class<-wt_aligned_class%>%separate(lipids, into = c("class", "bal"),sep =  " ")
+wt_aligned_class <- select(wt_aligned_class, -bal)
+wt_class <-wt_aligned_class %>% group_by(type, class) %>% summarise_all(funs(sum))
+wt_class_gather <- gather(wt_class, replicate, membr_perc, -one_of("class", "type"))
+#lip_db_gather <-  unite(lip_db_gather, type,replicate,col = "con_type", sep = "_")
+
+#con_type as a col names
+#db_only_gather$con_type <- make.names(db_only_gather$con_type, unique=TRUE)
+
+wt_class_gather <- spread(wt_class_gather, class, membr_perc)
+#rownames(lip_db_gather) <- lip_db_gather$con_type
+#lip_temp_gather<- lip_temp_gather%>% separate(con_type, into = c("type", "con"),sep =  "_")
+wt_class_gather$replicate <- make.names(wt_class_gather$replicate, unique=TRUE)
+rownames(wt_class_gather) <- wt_class_gather$replicate
+wt_class_gather <- select(wt_class_gather,-replicate)
+
+
+
+wt.class <- rownames(wt_class_gather)
+wt.class<-sub("\\.1","",wt.class)
+wt.class<-sub("X","",wt.class)
+wt.class<-sub("\\d{1}$","",wt.class)
+wt.class<-sub("\\.$","",wt.class) #remomve dot at the end
+wt.class<-sub("early","30C",wt.class)
+
+prin_comp_wttwmp <- prcomp(wt_class_gather[,2:5], scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = wt.class,
+              groups = wt.class )
+g <- g + scale_color_discrete(name = '')  +
+          scale_x_continuous(limits = c(-4, 4)) +
+          scale_y_continuous(limits = c(-4, 4))
+
+ 
+g <- g +  theme(legend.direction = 'horizontal', legend.position = 'top') + theme_bw()
+
+print(g)
+```
+
+
+shc alignt temp - class
+```{r}
+wt_sh_aligned <- read.xls("Desktop/Lipidomic/Mext_Lipidome_Feb2017.xlsx", sheet = 3, header = TRUE)
+wt_sh_aligned[is.na(wt_sh_aligned)] <- 0
+shc_aligned_class <- wt_sh_aligned  %>% filter(type=="SHC")
+shc_aligned_class <- shc_aligned_class  %>% select( starts_with("X"),starts_with("early"),type, lipids,-X13C.1)
+shc_aligned_class<-shc_aligned_class%>%separate(lipids, into = c("class", "bal"),sep =  " ")
+shc_aligned_class <- select(shc_aligned_class, -bal)
+shc_class <-shc_aligned_class %>% group_by(type, class) %>% summarise_all(funs(sum))
+shc_class_gather <- gather(shc_class, replicate, membr_perc, -one_of("class", "type"))
+#lip_db_gather <-  unite(lip_db_gather, type,replicate,col = "con_type", sep = "_")
+
+#con_type as a col names
+#db_only_gather$con_type <- make.names(db_only_gather$con_type, unique=TRUE)
+
+shc_class_gather <- spread(shc_class_gather, class, membr_perc)
+#rownames(lip_db_gather) <- lip_db_gather$con_type
+#lip_temp_gather<- lip_temp_gather%>% separate(con_type, into = c("type", "con"),sep =  "_")
+shc_class_gather$replicate <- make.names(shc_class_gather$replicate, unique=TRUE)
+rownames(shc_class_gather) <- shc_class_gather$replicate
+shc_class_gather <- select(shc_class_gather,-replicate)
+
+
+
+shc.class <- rownames(shc_class_gather)
+shc.class<-sub("\\.1","",shc.class)
+shc.class<-sub("X","",shc.class)
+shc.class<-sub("\\d{1}$","",shc.class)
+shc.class<-sub("\\.$","",shc.class) #remomve dot at the end
+shc.class<-sub("early","30C",shc.class)
+
+prin_comp_wttwmp <- prcomp(shc_class_gather[,2:5], scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = shc.class,
+              groups = shc.class )
+g <- g + scale_color_discrete(name = '')  +
+          scale_x_continuous(limits = c(-4, 4)) +
+          scale_y_continuous(limits = c(-4, 4))
+
+ 
+g <- g +  theme(legend.direction = 'horizontal', legend.position = 'top') + theme_bw()
+
+print(g)
+```
+
+alignt temp - db
+```{r}
+
+wt_sh_aligned <- read.xls("Desktop/Lipidomic/Mext_Lipidome_Feb2017.xlsx", sheet = 3, header = TRUE)
+wt_sh_aligned[is.na(wt_sh_aligned)] <- 0
+wt_sh_aligned_DB <- wt_sh_aligned  %>% select(-c(lipids, length))
+#wt_sh_aligned_l<-wt_sh_aligned_l%>%separate(lipids, into = c("class", "bal"),sep =  " ")
+#wt_sh_aligned_l <- select(wt_sh_aligned_l, -bal)
+lip_DB <-wt_sh_aligned_DB %>% group_by(type,DB) %>% summarise_each(funs(sum))
+lip_DB_gather <- gather(lip_DB, replicate, membr_perc, -one_of("DB", "type"))
+#lip_only_gather <-  unite(lip_only_gather, type,replicate,col = "con_type", sep = "_")
+
+#con_type as a col names
+#db_only_gather$con_type <- make.names(db_only_gather$con_type, unique=TRUE)
+
+lip_DB_gather <- spread(lip_DB_gather, DB, membr_perc)
+#rownames(lip_DB_gather) <- lip_DB_gather$replicate
+#lip_only_gather<- lip_only_gather%>% separate(con_type, into = c("type", "con"),sep =  "_")
+lip_DB_gather$replicate <- make.names(lip_DB_gather$replicate, unique=TRUE)
+rownames(lip_DB_gather) <- lip_DB_gather$replicate
+lip_DB_gather <- select(lip_DB_gather,-replicate)
+
+
+lipid.db <- rownames(lip_DB_gather)
+lipid.db<-sub("\\.1","",lipid.db)
+lipid.db<-sub("X","",lipid.db)
+lipid.db<-sub("\\d{1}$","",lipid.db)
+lipid.db<-sub("\\.$","",lipid.db) #remomve dot at the end
+lipid.db<-sub("early","30C",lipid.db)
+
+prin_comp_wttwmp <- prcomp(lip_DB_gather[,2:6], scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = lipid.db,
+              groups =lip_DB_gather$type )
+g <- g + scale_color_discrete(name = '')
+
+g <- g + theme(legend.direction = 'horizontal', legend.position = 'top') + theme_bw()
+
+print(g)
+
+
+
+```
+alignt temp - length
+```{r}
+wt_shc_alig_corr <- read_delim("~/Desktop/wt_shc_corr.csv", 
+    ";", escape_double = FALSE, trim_ws = TRUE)
+wt_shc_alig_corr[is.na(wt_shc_alig_corr)] <- 0
+wt_sh_aligned_length <-  wt_shc_alig_corr  %>% select(-c(lipids, DB))
+#wt_sh_aligned_l<-wt_sh_aligned_l%>%separate(lipids, into = c("class", "bal"),sep =  " ")
+#wt_sh_aligned_l <- select(wt_sh_aligned_l, -bal)
+lip_length <-wt_sh_aligned_length %>% group_by(type,length) %>% summarise_each(funs(sum))
+lip_length_gather <- gather(lip_length, replicate, membr_perc, -one_of("length", "type"))
+#lip_only_gather <-  unite(lip_only_gather, type,replicate,col = "con_type", sep = "_")
+
+#con_type as a col names
+#db_only_gather$con_type <- make.names(db_only_gather$con_type, unique=TRUE)
+
+lip_length_gather <- spread(lip_length_gather, length, membr_perc)
+#rownames(lip_DB_gather) <- lip_DB_gather$replicate
+#lip_only_gather<- lip_only_gather%>% separate(con_type, into = c("type", "con"),sep =  "_")
+lip_length_gather$replicate <- make.names(lip_length_gather$replicate, unique=TRUE)
+rownames(lip_length_gather) <- lip_length_gather$replicate
+lip_length_gather <- select(lip_length_gather,-replicate)
+
+
+lipid.length <- rownames(lip_length_gather)
+lipid.length<-sub("\\.1","",lipid.length)
+lipid.length<-sub("X","",lipid.length)
+lipid.length<-sub("\\d{1}$","",lipid.length)
+lipid.length<-sub("\\.$","",lipid.length) #remomve dot at the end
+lipid.length<-sub("early","30C",lipid.length)
+
+prin_comp_wttwmp <- prcomp(lip_length_gather[,2:8], scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = lipid.length,
+              groups =lip_length_gather$type )
+g <- g + scale_color_discrete(name = '')
+
+g <- g + theme(legend.direction = 'horizontal', legend.position = 'top') + theme_bw()
+
+print(g)
+
+
+
+```
+aligned dataset - temp - comparison WT/SHC
+```{r}
+wt_shc_alig_corr[is.na(wt_shc_alig_corr)] <- 0
+both_corr <- wt_shc_alig_corr
+both_corr <- both_corr %>% select(starts_with("early"), starts_with("13"), starts_with("20"),"type", "lipids")
+both_corr_gather <- both_corr %>% gather(replicate, membr_perc, -one_of("type", "lipids")) %>% tbl_df
+both_corr_spread <- spread(both_corr_gather, lipids, membr_perc)
+
+both_corr_spread$replicate <- make.names(both_corr_spread$replicate, unique=TRUE)
+rownames(both_corr_spread) <- both_corr_spread$replicate
+both_corr_spread <- select(both_corr_spread,-replicate)
+
+
+lipids.type <- rownames(both_corr_spread)
+lipids.type<-sub("\\.1","",lipids.type)
+lipids.type<-sub("X","",lipids.type)
+lipids.type<-sub("\\d{1}$","",lipids.type)
+lipids.type<-sub("\\.$","",lipids.type) #remomve dot at the end
+lipids.type<-sub("early","30C",lipids.type)
+
+prin_comp_wttwmp <- prcomp(both_corr_spread[,2:18], scale. = T)
+
+plot(prin_comp_wttwmp, type = "l") #first PC explain most of the variability in the data
+
+g <- ggbiplot(prin_comp_wttwmp, obs.scale = 1, var.scale = 1,
+              labels = lipids.type,
+              groups =both_corr_spread$type )
+g <- g + scale_color_discrete(name = '') +
+  scale_x_continuous(limits = c(-6, 6)) +
+  scale_y_continuous(limits = c(-6, 6))
+
+g <- g + theme(legend.direction = 'horizontal', legend.position = 'top') + theme_bw()
+
+print(g)
+
+```
+CLASS 
+```{r}
+test<- ph_all %>% select( -c(DB,length))
+test<-test%>%separate(lipids, into = c("class", "bal"),sep =  " ")
+test <- select(test, -bal)
+test_gat <- gather(test, replicate, membr_perc, -one_of("type", "class")) %>% tbl_df
+test_gat$replicate <- sub("\\d{1}$","", test_gat$replicate)
+test_gat_sum <-test_gat %>% group_by(type, class, replicate) %>% summarise_all(funs(mean))
+
+test_gat_sum$replicate <- factor(test_gat_sum$replicate, levels = c("early","mid","late","stat", "13C ","20C ", "pH 5.5 ","pH 6 ", "pH 7 ", "pH 7.5 ","MetOH 0.1 ", "MetOH 1 ","NaCl 0.05 " ,"NaCl 0.1 "))
+
+ggplot(test_gat_sum, aes(x= replicate, y= membr_perc)) + 
+  facet_grid(class~., scales="free") + 
+  geom_line(aes(colour = type, group = type)) +
+  geom_point() + 
+  theme(axis.text.x=element_text(angle=90,hjust=1),panel.background = element_rect(fill = "white", colour = "grey50")) 
+```
+
+VMR BY CLASS
+
+```{r}
+class<-test
+class_sum <-class %>% group_by(type, class) %>% summarise_all(funs(mean))
+class_sum = mutate(class_sum, concated_column = paste(class, type, sep = '_')) %>% tbl_df
+#class_sum <-  as.data.frame(class_sum[,3:45]) 
+
+#VMR for pH
+class_sum <- class_sum %>% 
+  select(starts_with("pH")) %>%
+  rowwise() %>% 
+  do(data.frame(vmr_ph = var(unlist(.))/mean(unlist(.)))) %>% 
+  bind_cols(class_sum, .)
+
+#VMR for gs
+class_sum <- class_sum %>% 
+  select(starts_with("early"),starts_with("mid"),starts_with("late"),starts_with("stat")) %>%
+  rowwise() %>% 
+  do(data.frame(vmr_gs = var(unlist(.))/mean(unlist(.)))) %>% 
+  bind_cols(class_sum, .)
+
+#VMR for temp
+class_sum <- class_sum %>% 
+  select(starts_with("13"),starts_with("20")) %>%
+  rowwise() %>% 
+  do(data.frame(vmr_temp = var(unlist(.))/mean(unlist(.)))) %>% 
+  bind_cols(class_sum, .)
+
+#VMR for NaCl
+class_sum <- class_sum %>% 
+  select(starts_with("Na")) %>%
+  rowwise() %>% 
+  do(data.frame(vmr_NaCl = var(unlist(.))/mean(unlist(.)))) %>% 
+  bind_cols(class_sum, .)
+
+#VMR for MetOh
+class_sum <- class_sum %>% 
+  select(starts_with("Met")) %>%
+  rowwise() %>% 
+  do(data.frame(vmr_Met = var(unlist(.))/mean(unlist(.)))) %>% 
+  bind_cols(class_sum, .)
+
+rownames(class_sum) <- class_sum$concated_column
+class_sum<- class_sum%>% select(-concated_column)
+
+stat <- class_sum %>% 
+  select(starts_with("vmr"), type) %>%
+  group_by(type) %>% 
+  summarise_each(funs(mean(.), sum(.)) )
+
+
+
+sum <-class_sum %>% 
+  select(starts_with("vmr"), type) %>%
+  group_by(type) %>% 
+  summarise_all(funs(sum(.) ))
+mean <-class_sum %>% 
+  select(starts_with("vmr"), type) %>%
+  group_by(type) %>% 
+  summarise_all(funs(mean(.) ))
+
+vmr <- class_sum %>% select(starts_with("vmr"), type)
+vmr_gat <- vmr %>% gather(vmr, num, -one_of("type")) %>% tbl_df()
+
+mean_gat <- mean %>% gather(vmr, mean, -one_of("type")) %>% tbl_df()
+sum_gat <- sum %>% gather(vmr, sum, -one_of("type")) %>% tbl_df()
+plot1 <- ggplot(mean_gat, aes(x = vmr, y= mean, col = type, fill=type)) + geom_bar(stat = "identity", position = "dodge")
+plot2 <- ggplot(sum_gat, aes(x = vmr, y= sum, col = type, fill=type)) + geom_bar(stat = "identity", position = "dodge")
+
+grid.arrange(plot1, plot2, nrow=2, ncol=1)
+```
+difference between lipid classes
+```{r}
+class_gat <- class_sum %>% gather(rep, num, -one_of("type", "class")) %>% tbl_df
+
+library(Hmisc)
+library(ggthemes)
+class_gat$type <- factor(class_gat$type)
+class_gat$class <- factor(class_gat$class)
+ggplot(class_gat, aes(x = type, y= num, col = class, fill=class, group = class)) +
+  stat_summary(fun.y= "mean", geom= "line") + 
+  stat_summary(fun.data= "mean_sdl", fun.args = list(mult = 1), geom= "ribbon", col = NA, alpha = 0.1) + theme_bw()
+  
+ggplot(class_gat, aes(x = type, y= num, col = class, fill=class, group = class)) +
+  stat_summary(fun.y= "mean", geom= "line") + theme_bw()
+
+ggplot(class_gat, aes(x = type, y= num, col = class)) + geom_jitter() 
+```
+
+
+
+chain length
+mean for each condition
+```{r}
+leng<- ph_all %>% select( -c(DB,lipids))
+
+leng_gat <- gather(leng, replicate, membr_perc, -one_of("type", "length")) %>% tbl_df
+leng_gat$replicate <- sub("\\d{1}$","", leng_gat$replicate)
+leng_gat_sum <-leng_gat %>% group_by(type, length, replicate) %>% summarise_all(funs(mean))
+
+leng_gat_sum$replicate <- factor(leng_gat_sum$replicate, levels = c("early","mid","late","stat", "13C ","20C ", "pH 5.5 ","pH 6 ", "pH 7 ", "pH 7.5 ","MetOH 0.1 ", "MetOH 1 ","NaCl 0.05 " ,"NaCl 0.1 "))
+
+ggplot(leng_gat_sum, aes(x= replicate, y= membr_perc)) + 
+  facet_grid(length~., scales="free") + 
+  geom_line(aes(colour = type, group = type)) +
+  geom_point() + 
+  theme(axis.text.x=element_text(angle=90,hjust=1),panel.background = element_rect(fill = "white", colour = "grey50")) 
+```
+```{r}
+leng<- ph_all %>% select( -c(DB,lipids))
+
+leng_gat <- gather(leng, replicate, membr_perc, -one_of("type", "length")) %>% tbl_df
+leng_gat$replicate <- sub("\\d{1}$","", leng_gat$replicate)
+#leng_gat_sum <-leng_gat %>% group_by(type, length, replicate) %>% summarise_all(funs(mean))
+
+leng_gat$replicate <- factor(leng_gat_sum$replicate, levels = c("early","mid","late","stat", "13C ","20C ", "pH 5.5 ","pH 6 ", "pH 7 ", "pH 7.5 ","MetOH 0.1 ", "MetOH 1 ","NaCl 0.05 " ,"NaCl 0.1 "))
+
+ggplot(leng_gat, aes(x= replicate, y= membr_perc)) + 
+  facet_grid(length~., scales="free") + 
+  geom_line(aes(colour = type, group = type)) +
+  geom_point(size = 0.1) + 
+  theme(axis.text.x=element_text(angle=90,hjust=1),panel.background = element_rect(fill = "white", colour = "grey50")) 
+```
+
+
+VMR BY chain length
+
+```{r}
+class_l<-leng
+class_sum_l <-class_l %>% group_by(type, length) %>% summarise_all(funs(mean))
+class_sum_l = mutate(class_sum, concated_column = paste(length, type, sep = '_')) %>% tbl_df
+#class_sum <-  as.data.frame(class_sum[,3:45]) 
+
+#VMR for pH
+class_sum_l <- class_sum_l %>% 
+  select(starts_with("pH")) %>%
+  rowwise() %>% 
+  do(data.frame(vmr_ph = var(unlist(.))/mean(unlist(.)))) %>% 
+  bind_cols(class_sum_l, .)
+
+#VMR for gs
+class_sum_l <- class_sum_l %>% 
+  select(starts_with("early"),starts_with("mid"),starts_with("late"),starts_with("stat")) %>%
+  rowwise() %>% 
+  do(data.frame(vmr_gs = var(unlist(.))/mean(unlist(.)))) %>% 
+  bind_cols(class_sum_l, .)
+
+#VMR for temp
+class_sum_l <- class_sum_l %>% 
+  select(starts_with("13"),starts_with("20")) %>%
+  rowwise() %>% 
+  do(data.frame(vmr_temp = var(unlist(.))/mean(unlist(.)))) %>% 
+  bind_cols(class_sum_l, .)
+
+#VMR for NaCl
+class_sum_l <- class_sum_l %>% 
+  select(starts_with("Na")) %>%
+  rowwise() %>% 
+  do(data.frame(vmr_NaCl = var(unlist(.))/mean(unlist(.)))) %>% 
+  bind_cols(class_sum_l, .)
+
+#VMR for MetOh
+class_sum_l <- class_sum_l %>% 
+  select(starts_with("Met")) %>%
+  rowwise() %>% 
+  do(data.frame(vmr_Met = var(unlist(.))/mean(unlist(.)))) %>% 
+  bind_cols(class_sum_l, .)
+
+rownames(class_sum_l) <- class_sum_l$concated_column
+class_sum_l<- class_sum_l%>% select(-concated_column)
+
+stat_l <- class_sum_l %>% 
+  select(starts_with("vmr"), type) %>%
+  group_by(type) %>% 
+  summarise_each(funs(mean(.), sum(.)) )
+
+
+
+sum_l <-class_sum_l %>% 
+  select(starts_with("vmr"), type) %>%
+  group_by(type) %>% 
+  summarise_all(funs(sum(.) ))
+mean_l <-class_sum_l %>% 
+  select(starts_with("vmr"), type) %>%
+  group_by(type) %>% 
+  summarise_all(funs(mean(.) ))
+
+vmr_l <- class_sum_l %>% select(starts_with("vmr"), type)
+vmr_gat_l <- vmr %>% gather(vmr, num, -one_of("type")) %>% tbl_df()
+
+mean_gat_l <- mean_l %>% gather(vmr, mean, -one_of("type")) %>% tbl_df()
+sum_gat_l <- sum_l %>% gather(vmr, sum, -one_of("type")) %>% tbl_df()
+plot1 <- ggplot(mean_gat_l, aes(x = vmr, y= mean, col = type, fill=type)) + geom_bar(stat = "identity", position = "dodge")
+plot2 <- ggplot(sum_gat_l, aes(x = vmr, y= sum, col = type, fill=type)) + geom_bar(stat = "identity", position = "dodge")
+
+grid.arrange(plot1, plot2, nrow=2, ncol=1)
+```
+
+difference between lipid classes
+```{r}
+class_gat_l <- class_l %>% gather(rep, num, -one_of("type", "length")) %>% tbl_df
+
+library(Hmisc)
+library(ggthemes)
+class_gat_l$type <- factor(class_gat_l$type)
+class_gat_l$length <- factor(class_gat_l$length)
+ggplot(class_gat_l, aes(x = type, y= num, col = length, fill=length, group = length)) +
+  stat_summary(fun.y= "mean", geom= "line") + 
+  stat_summary(fun.data= "mean_sdl", fun.args = list(mult = 1), geom= "ribbon", col = NA, alpha = 0.1) + theme_bw()
+  
+ggplot(class_gat_l, aes(x = type, y= num, col = length, fill=length, group = length)) +
+  stat_summary(fun.y= "mean", geom= "line") + theme_bw()
+
+ggplot(class_gat_l, aes(x = type, y= num, col = class)) + geom_jitter()
+dodge <- position_dodge(width = 0.9)
+ggplot(class_gat_l, aes(x = length, y= num, col =type)) + geom_point(position=position_jitterdodge(dodge.width=0.9)) + 
+   geom_boxplot(alpha=0) + theme_bw()
+
+```
+
+db
+```{r}
+DB<- ph_all %>% select( -c(length,lipids))
+
+DB_gat <- gather(DB, replicate, membr_perc, -one_of("type", "DB")) %>% tbl_df
+DB_gat$replicate <- sub("\\d{1}$","", DB_gat$replicate)
+DB_gat_sum <-DB_gat %>% group_by(type, DB, replicate) %>% summarise_all(funs(mean))
+
+DB_gat_sum$replicate <- factor(DB_gat_sum$replicate, levels = c("early","mid","late","stat", "13C ","20C ", "pH 5.5 ","pH 6 ", "pH 7 ", "pH 7.5 ","MetOH 0.1 ", "MetOH 1 ","NaCl 0.05 " ,"NaCl 0.1 "))
+
+ggplot(DB_gat_sum, aes(x= replicate, y= membr_perc)) + 
+  facet_grid(DB~., scales="free") + 
+  geom_line(aes(colour = type, group = type)) +
+  geom_point() + 
+  theme(axis.text.x=element_text(angle=90,hjust=1),panel.background = element_rect(fill = "white", colour = "grey50")) 
+```
+VMR BY db
+
+```{r}
+class<-DB
+class_sum_db <-class %>% group_by(type, DB) %>% summarise_all(funs(mean))
+class_sum_db = mutate(class_sum_db, concated_column = paste(DB, type, sep = '_')) %>% tbl_df
+#class_sum <-  as.data.frame(class_sum[,3:45]) 
+
+class_sum_db_g <- class %>% gather(rep, num, -one_of("type", "DB"))
+class_sum_db_g$rep<-sub("X","",class_sum_db_g$rep)
+class_sum_db_g$rep<-sub("\\d$","",class_sum_db_g$rep)
+
+class_sum_db_g$rep<-sub("\\.$","",class_sum_db_g$rep)
+gs <- c("early", "mid", "late", "stat")
+class_sum_db_g$groups <- ifelse(grepl("pH",class_sum_db_g$rep), "ph", 
+         ifelse(grepl("13",class_sum_db_g$rep),"temp", 
+        ifelse(grepl("20",class_sum_db_g$rep),"temp",
+         ifelse(grepl(paste(gs, collapse = "|"), class_sum_db_g$rep),"gs",
+        ifelse(grepl("Na",class_sum_db_g$rep), "salt",
+               ifelse(grepl("Met",class_sum_db_g$rep), "MetOH",
+                
+                "Other"))))))
+
+
+
+#VMR for pH
+class_sum_db <- class_sum_db %>% 
+  select(starts_with("pH")) %>%
+  rowwise() %>% 
+  do(data.frame(vmr_ph = var(unlist(.))/mean(unlist(.)))) %>% 
+  bind_cols(class_sum_db, .)
+
+#VMR for gs
+class_sum_db <- class_sum_db %>% 
+  select(starts_with("early"),starts_with("mid"),starts_with("late"),starts_with("stat")) %>%
+  rowwise() %>% 
+  do(data.frame(vmr_gs = var(unlist(.))/mean(unlist(.)))) %>% 
+  bind_cols(class_sum_db, .)
+
+#VMR for temp
+class_sum_db <- class_sum_db %>% 
+  select(starts_with("13"),starts_with("20")) %>%
+  rowwise() %>% 
+  do(data.frame(vmr_temp = var(unlist(.))/mean(unlist(.)))) %>% 
+  bind_cols(class_sum_db, .)
+
+#VMR for NaCl
+class_sum_db <- class_sum_db %>% 
+  select(starts_with("Na")) %>%
+  rowwise() %>% 
+  do(data.frame(vmr_NaCl = var(unlist(.))/mean(unlist(.)))) %>% 
+  bind_cols(class_sum_db, .)
+
+#VMR for MetOh
+class_sum_db <- class_sum_db %>% 
+  select(starts_with("Met")) %>%
+  rowwise() %>% 
+  do(data.frame(vmr_Met = var(unlist(.))/mean(unlist(.)))) %>% 
+  bind_cols(class_sum_db, .)
+
+rownames(class_sum_db) <- class_sum_db$concated_column
+class_sum_db<- class_sum_db%>% select(-concated_column)
+
+stat_DB <- class_sum_db %>% 
+  select(starts_with("vmr"), type) %>%
+  group_by(type) %>% 
+  summarise_each(funs(mean(.), sum(.)) )
+
+
+
+sum_DB <-class_sum_db %>% 
+  select(starts_with("vmr"), type) %>%
+  group_by(type) %>% 
+  summarise_all(funs(sum(.) ))
+mean_DB <-class_sum_db %>% 
+  select(starts_with("vmr"), type) %>%
+  group_by(type) %>% 
+  summarise_all(funs(mean(.) ))
+
+vmr_DB <- class_sum_db %>% select(starts_with("vmr"), type)
+vmr_gat_DB <- vmr %>% gather(vmr, num, -one_of("type")) %>% tbl_df()
+
+mean_gat_DB <- mean_DB %>% gather(vmr, mean, -one_of("type")) %>% tbl_df()
+sum_gat_DB <- sum_DB %>% gather(vmr, sum, -one_of("type")) %>% tbl_df()
+plot1_DB <- ggplot(mean_gat_DB, aes(x = vmr, y= mean, col = type, fill=type)) + geom_bar(stat = "identity", position = "dodge")
+plot2_DB <- ggplot(sum_gat_DB, aes(x = vmr, y= sum, col = type, fill=type)) + geom_bar(stat = "identity", position = "dodge")
+
+grid.arrange(plot1_DB, plot2_DB, nrow=2, ncol=1)
+
+class_sum_db_g$num <- as.numeric(as.character(class_sum_db_g$num))
+ggplot(class_sum_db_g, aes(x= DB, y = num, col = rep)) +  geom_jitter(size = 0.1) +
+  facet_grid( groups~type, scales = "free_y" ) +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1)) +
+  scale_color_manual(values = mycolors)
+```
+
+difference between lipid DB
+```{r}
+class_gat_DB <- class %>% gather(rep, num, -one_of("type", "DB")) %>% tbl_df
+
+library(Hmisc)
+library(ggthemes)
+class_gat_DB$type <- factor(class_gat_DB$type)
+class_gat_DB$DB <- factor(class_gat_DB$DB)
+ggplot(class_gat_DB, aes(x = type, y= num, col = DB, fill=DB, group = DB)) +
+  stat_summary(fun.y= "mean", geom= "line") + 
+  stat_summary(fun.data= "mean_sdl", fun.args = list(mult = 1), geom= "ribbon", col = NA, alpha = 0.1) + theme_bw()
+  
+ggplot(class_gat_DB, aes(x = type, y= num, col = DB, fill=DB, group = DB)) +
+  stat_summary(fun.y= "mean", geom= "line") + theme_bw()
+
+ggplot(class_gat_DB, aes(x = DB, y= num, col = rep)) + geom_jitter()
+
+
+```
+
+```{r}
+temp_all <- wt_sh_aligned %>% select(starts_with("X"), starts_with("early"), lipids, type, length, DB)
+temp_all_gat <- gather(temp_all, rep, mem_perc, -one_of("type", "lipids", "DB", "length"))
+
+temp_all_gat$groups <- ifelse(temp_all_gat$rep  %in% c("ph"), "PH",
+          ifelse(temp_all_gat$rep %in% c("1", "2"), "temp", 
+          3)) %>% tbl_df()
+
+
+temp_all_gat$rep<-sub("X","",temp_all_gat$rep)
+temp_all_gat$rep<-sub("\\.[1,3,2]*$","",temp_all_gat$rep)
+temp_all_gat$rep<-sub("early*","30C",temp_all_gat$rep)
+
+
+
+ggplot(temp_all_gat, aes(x= lipids, y = mem_perc, col = rep)) + 
+  geom_boxplot(alpha=0.7) + coord_flip() 
+wt_sh_aligned[is.na(wt_sh_aligned)] <- 0
+
+
+all <- wt_sh_aligned
+all_gat <- gather(all, rep, mem_perc, -one_of("type", "lipids", "DB", "length"))
+all_gat$rep<-sub("X","",all_gat$rep)
+all_gat$rep<-sub("\\d$","",all_gat$rep)
+
+all_gat$rep<-sub("\\.$","",all_gat$rep)
+gs <- c("early", "mid", "late", "stat")
+all_gat$groups <- ifelse(grepl("pH",all_gat$rep), "ph", 
+         ifelse(grepl("13",all_gat$rep),"temp", 
+        ifelse(grepl("20",all_gat$rep),"temp",
+         ifelse(grepl(paste(gs, collapse = "|"), all_gat$rep),"gs",
+        ifelse(grepl("Na",all_gat$rep), "salt",
+               ifelse(grepl("Met",all_gat$rep), "MetOH",
+                
+                "Other"))))))
+
+
+
+mycolors = c(brewer.pal(name="Dark2", n = 8), brewer.pal(name="Paired", n = 6))
+
+ggplot(all_gat, aes(x= lipids, y = mem_perc, col = rep)) +  geom_jitter(size = 0.1) +
+  facet_grid( groups~type, scales = "free_y" ) + 
+   geom_boxplot(alpha=0) +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1)) +
+  scale_color_manual(values = mycolors)
+
+```
+Delete temp = 13.1 and ph = 6.3
+VMR BY CLASS without temp = 13.1 and ph = 6.3
+
+```{r}
+class<-DB
+index_ph6.3 <- which(colnames(class)=="pH 6 1")
+index_temp13.1 <- which(colnames(class)=="13C 1")
+class <- class[, -c(index_ph6.3, index_temp13.1)]
+class_sum_db <-class %>% group_by(type, DB) %>% summarise_all(funs(mean))
+class_sum_db = mutate(class_sum_db, concated_column = paste(DB, type, sep = '_')) %>% tbl_df
+#class_sum <-  as.data.frame(class_sum[,3:45]) 
+
+#VMR for pH
+class_sum_db <- class_sum_db %>% 
+  select(starts_with("pH")) %>%
+  rowwise() %>% 
+  do(data.frame(vmr_ph = var(unlist(.))/mean(unlist(.)))) %>% 
+  bind_cols(class_sum_db, .)
+
+#VMR for gs
+class_sum_db <- class_sum_db %>% 
+  select(starts_with("early"),starts_with("mid"),starts_with("late"),starts_with("stat")) %>%
+  rowwise() %>% 
+  do(data.frame(vmr_gs = var(unlist(.))/mean(unlist(.)))) %>% 
+  bind_cols(class_sum_db, .)
+
+#VMR for temp
+class_sum_db <- class_sum_db %>% 
+  select(starts_with("13"),starts_with("20")) %>%
+  rowwise() %>% 
+  do(data.frame(vmr_temp = var(unlist(.))/mean(unlist(.)))) %>% 
+  bind_cols(class_sum_db, .)
+
+#VMR for NaCl
+class_sum_db <- class_sum_db %>% 
+  select(starts_with("Na")) %>%
+  rowwise() %>% 
+  do(data.frame(vmr_NaCl = var(unlist(.))/mean(unlist(.)))) %>% 
+  bind_cols(class_sum_db, .)
+
+#VMR for MetOh
+class_sum_db <- class_sum_db %>% 
+  select(starts_with("Met")) %>%
+  rowwise() %>% 
+  do(data.frame(vmr_Met = var(unlist(.))/mean(unlist(.)))) %>% 
+  bind_cols(class_sum_db, .)
+
+rownames(class_sum_db) <- class_sum_db$concated_column
+class_sum_db<- class_sum_db%>% select(-concated_column)
+
+stat_DB <- class_sum_db %>% 
+  select(starts_with("vmr"), type) %>%
+  group_by(type) %>% 
+  summarise_each(funs(mean(.), sum(.)) )
+
+
+
+sum_DB <-class_sum_db %>% 
+  select(starts_with("vmr"), type) %>%
+  group_by(type) %>% 
+  summarise_all(funs(sum(.) ))
+mean_DB <-class_sum_db %>% 
+  select(starts_with("vmr"), type) %>%
+  group_by(type) %>% 
+  summarise_all(funs(mean(.) ))
+
+vmr_DB <- class_sum_db %>% select(starts_with("vmr"), type)
+vmr_gat_DB <- vmr %>% gather(vmr, num, -one_of("type")) %>% tbl_df()
+
+mean_gat_DB <- mean_DB %>% gather(vmr, mean, -one_of("type")) %>% tbl_df()
+sum_gat_DB <- sum_DB %>% gather(vmr, sum, -one_of("type")) %>% tbl_df()
+plot1_DB <- ggplot(mean_gat_DB, aes(x = vmr, y= mean, col = type, fill=type)) + geom_bar(stat = "identity", position = "dodge")
+plot2_DB <- ggplot(sum_gat_DB, aes(x = vmr, y= sum, col = type, fill=type)) + geom_bar(stat = "identity", position = "dodge")
+
+grid.arrange(plot1_DB, plot2_DB, nrow=2, ncol=1)
+```
+
+
+
+compare DB-  all conditions:
+```{r}
+all <- wt_sh_aligned
+all_gat <- gather(all, rep, mem_perc, -one_of("type", "lipids", "DB", "length"))
+all_gat$rep<-sub("X","",all_gat$rep)
+all_gat$rep<-sub("\\d$","",all_gat$rep)
+
+all_gat$rep<-sub("\\.$","",all_gat$rep)
+gs <- c("early", "mid", "late", "stat")
+all_gat$groups <- ifelse(grepl("pH",all_gat$rep), "ph", 
+         ifelse(grepl("13",all_gat$rep),"temp", 
+        ifelse(grepl("20",all_gat$rep),"temp",
+         ifelse(grepl(paste(gs, collapse = "|"), all_gat$rep),"gs",
+        ifelse(grepl("Na",all_gat$rep), "salt",
+               ifelse(grepl("Met",all_gat$rep), "MetOH",
+                
+                "Other"))))))
+
+
+
+mycolors = c(brewer.pal(name="Dark2", n = 8), brewer.pal(name="Paired", n = 6))
+
+ggplot(all_gat, aes(x= DB, y = mem_perc, col = rep)) +  geom_jitter(size = 0.1) +
+  facet_grid( groups~., scales = "free_y" ) + 
+   geom_boxplot(alpha=0) +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1)) +
+  scale_color_manual(values = mycolors)
+
+```
+
+```{r}
+class<-DB
+index_ph6.3 <- which(colnames(class)=="pH 6 1")
+index_temp13.1 <- which(colnames(class)=="13C 1")
+
+class <- class[, -c(index_ph6.3, index_temp13.1)]
+
+class_sum_db_g <- class %>% gather(rep, num, -one_of("type", "DB"))
+class_sum_db_g$rep<-sub("X","",class_sum_db_g$rep)
+class_sum_db_g$rep<-sub("\\d$","",class_sum_db_g$rep)
+
+class_sum_db_g$rep<-sub("\\.$","",class_sum_db_g$rep)
+gs <- c("early", "mid", "late", "stat")
+class_sum_db_g$groups <- ifelse(grepl("pH",class_sum_db_g$rep), "ph", 
+        ifelse(grepl("13",class_sum_db_g$rep),"temp", 
+        ifelse(grepl("20",class_sum_db_g$rep),"temp",
+         ifelse(grepl(paste(gs, collapse = "|"), class_sum_db_g$rep),"gs",
+        ifelse(grepl("Na",class_sum_db_g$rep), "salt",
+               ifelse(grepl("Met",class_sum_db_g$rep), "MetOH",
+                
+                "Other"))))))
+class_sum_db_g$type <- as.factor(class_sum_db_g$type)
+class_sum_db_g_sum <-class_sum_db_g %>% group_by(groups, rep, type, DB) %>% summarise_all(funs(sum))
+
+ggplot(class_sum_db_g_sum, aes(x = DB, y= num, col = groups)) + 
+  geom_point(size = 0.1, position = position_dodge(width = 0.5))+
+  facet_grid(. ~ type, scales = "free_y")
+
+
+
+db_temp <- class_sum_db_g_sum %>% filter(DB == 2, groups == "temp" )
+
+ggplot(db_temp, aes(x = groups, y= num, col = groups)) + 
+  geom_jitter(size = 0.5)   +
+  facet_grid(. ~ type, scales = "free_y")
+
+db_0 <- class_sum_db_g_sum %>% filter(DB == 0 )
+
+ggplot(class_sum_db_g_sum, aes(x =DB, y= num, col =groups)) + 
+  geom_point(size = 0.1, position = position_dodge(width = 0.5))   +
+  facet_grid(. ~ type, scales = "free_y")
+WT <- class_sum_db_g_sum %>% filter(type =="WT")
+SHC<- class_sum_db_g_sum %>% filter(type =="SHC")
+ggplot(class_sum_db_g_sum, aes(x =DB, y= num, col = groups())) + 
+  geom_point(aes(color=WT), size=1) +
+  geom_point(aes(x=SHC, color=groups), size=1) 
+
+
+
+
+```
+
+```{r}
+library(readr)
+algn_hopa <- read_delim("~/Desktop/Lipidomic/algn_hopa.csv", 
+    ";", escape_double = FALSE, trim_ws = TRUE)
+
+index_ph6.3 <- which(colnames(algn_hopa)=="pH 6 1")
+index_temp13.1 <- which(colnames(algn_hopa)=="13C 1")
+algn_hopa <- algn_hopa[, -c(index_ph6.3, index_temp13.1)]
+
+
+algn_hopa_DB<-algn_hopa %>% select( -c(lipids,length))
+
+algn_hopa_g <- algn_hopa_DB %>% gather(rep, num, -one_of("type", "DB"))
+class_sum_db_g$rep<-sub("X","",class_sum_db_g$rep)
+class_sum_db_g$rep<-sub("\\d$","",class_sum_db_g$rep)
+class_sum_db_g$rep<-sub("\\.$","",class_sum_db_g$rep)
+
+gs <- c("early", "mid", "late", "stat")
+algn_hopa_g$groups <- ifelse(grepl("pH",algn_hopa_g$rep), "ph", 
+        ifelse(grepl("13",algn_hopa_g$rep),"temp", 
+         ifelse(grepl("30",algn_hopa_g$rep),"temp",
+               ifelse(grepl("20",algn_hopa_g$rep),"temp",
+         ifelse(grepl(paste(gs, collapse = "|"), algn_hopa_g$rep),"gs",
+        ifelse(grepl("Na",algn_hopa_g$rep), "salt",
+               ifelse(grepl("Met",algn_hopa_g$rep), "MetOH",
+                
+                "Other")))))))
+#algn_hopa_g$type <- as.factor(algn_hopa_g$type)
+algn_hopa_g <-algn_hopa_g %>% group_by(groups, rep, type, DB) %>% summarise_all(funs(sum))
+
+ggplot(algn_hopa_g, aes(x = as.factor(DB), y= num, col = groups)) + 
+  geom_point(size = 0.1, position = position_dodge(width = 0.5))+
+  facet_grid(. ~ type, scales = "free_y")
+
+
+
+
+```
+
+```{r}
+algn_hopa_hg<-algn_hopa %>% select( -c(DB,length))
+
+algn_hopa_g_HG <- algn_hopa_hg %>% gather(rep, num, -one_of("type", "lipids"))
+algn_hopa_g_HG$rep<-sub("X","",algn_hopa_g_HG$rep)
+algn_hopa_g_HG$rep<-sub("\\d$","",algn_hopa_g_HG$rep)
+algn_hopa_g_HG$rep<-sub("\\.$","",algn_hopa_g_HG$rep)
+
+gs <- c("early", "mid", "late", "stat")
+algn_hopa_g_HG$groups <- ifelse(grepl("pH",algn_hopa_g_HG$rep), "ph", 
+        ifelse(grepl("13",algn_hopa_g_HG$rep),"temp", 
+         ifelse(grepl("30",algn_hopa_g_HG$rep),"temp",
+               ifelse(grepl("20",algn_hopa_g_HG$rep),"temp",
+         ifelse(grepl(paste(gs, collapse = "|"), algn_hopa_g_HG$rep),"gs",
+        ifelse(grepl("Na",algn_hopa_g_HG$rep), "salt",
+               ifelse(grepl("Met",algn_hopa_g_HG$rep), "MetOH",
+                
+                "Other")))))))
+#algn_hopa_g$type <- as.factor(algn_hopa_g$type)
+algn_hopa_g_HG <-algn_hopa_g_HG %>% group_by(groups, rep, type, lipids) %>% summarise_all(funs(sum))
+
+
+cyl_table <- table(mtcars$cyl)
+cyl_levels <- names(cyl_table)[order(cyl_table)]
+mtcars$cyl2 <- factor(mtcars$cyl, levels = cyl_levels)
+# Just to be clear, the above line is no different than:
+# mtcars$cyl2 <- factor(mtcars$cyl, levels = c("6","4","8"))
+# You can manually set the levels in whatever order you please. 
+ggplot(mtcars, aes(cyl2)) + geom_bar()
+
+
+lip <- table(algn_hopa_g_HG$lipids)
+lip_levels <- names(lip)[order(lip)]
+algn_hopa_g_HG$lipids <- factor(algn_hopa_g_HG$lipids, levels = lip_levels)
+
+ggplot(algn_hopa_g_HG, aes(x = factor(lipids), y= num, col = groups)) + 
+  geom_point(size = 0.2, position = position_dodge(width = 1))+
+  facet_grid(. ~ type, scales = "free_y") +
+  theme(axis.text.x=element_text(angle=90,hjust=1), text = element_text(size=5)) 
+
+
+```
+
+```{r}
+algn_hopa_len<-algn_hopa %>% select( -c(DB,lipids))
+
+algn_hopa_len_HG <- algn_hopa_len %>% gather(rep, num, -one_of("type", "length"))
+algn_hopa_len_HG$rep<-sub("X","",algn_hopa_len_HG$rep)
+algn_hopa_len_HG$rep<-sub("\\d$","",algn_hopa_len_HG$rep)
+algn_hopa_len_HG$rep<-sub("\\.$","",algn_hopa_len_HG$rep)
+
+gs <- c("early", "mid", "late", "stat")
+algn_hopa_len_HG$groups <- ifelse(grepl("pH",algn_hopa_len_HG$rep), "ph", 
+        ifelse(grepl("13",algn_hopa_len_HG$rep),"temp", 
+         ifelse(grepl("30",algn_hopa_len_HG$rep),"temp",
+               ifelse(grepl("20",algn_hopa_len_HG$rep),"temp",
+         ifelse(grepl(paste(gs, collapse = "|"), algn_hopa_len_HG$rep),"gs",
+        ifelse(grepl("Na",algn_hopa_len_HG$rep), "salt",
+               ifelse(grepl("Met",algn_hopa_len_HG$rep), "MetOH",
+                
+                "Other")))))))
+#algn_hopa_g$type <- as.factor(algn_hopa_g$type)
+algn_hopa_len_HG <-algn_hopa_len_HG %>% group_by(groups, rep, type, length) %>% summarise_all(funs(sum))
+
+
+
+
+ggplot(algn_hopa_len_HG, aes(x = factor(length), y= num, col = groups)) + 
+  geom_point(size = 0.1, position = position_dodge(width = 0.5))+
+  facet_grid(. ~ type, scales = "free_y") +
+  theme(axis.text.x=element_text(angle=90,hjust=1), text = element_text(size=5)) 
+
+
+```
+
+```{r}
+algn_hopa_hg<-algn_hopa %>% select( -c(DB,length))
+
+algn_hopa_class<-algn_hopa_hg%>%separate(lipids, into = c("class", "bal"),sep =  " ")
+algn_hopa_class <- algn_hopa_class %>% select(-bal)
+
+algn_hopa_class_gat <- algn_hopa_class %>% gather(rep, num, -one_of("type", "class"))
+algn_hopa_class_gat$rep<-sub("X","",algn_hopa_class_gat$rep)
+algn_hopa_class_gat$rep<-sub("\\d$","",algn_hopa_class_gat$rep)
+algn_hopa_class_gat$rep<-sub("\\.$","",algn_hopa_class_gat$rep)
+
+gs <- c("early", "mid", "late", "stat")
+algn_hopa_class_gat$groups <- ifelse(grepl("pH",algn_hopa_class_gat$rep), "Ph", 
+                                  ifelse(grepl("13",algn_hopa_class_gat$rep),"Temperature", 
+                                            ifelse(grepl("30",algn_hopa_class_gat$rep),"Temperature",
+                                                   ifelse(grepl("20",algn_hopa_class_gat$rep),"Temperature",
+                                                          ifelse(grepl(paste(gs, collapse = "|"), algn_hopa_class_gat$rep),"Growth stage",
+                                                                 ifelse(grepl("Na",algn_hopa_class_gat$rep), "NaCl",
+                                                                        ifelse(grepl("Met",algn_hopa_class_gat$rep), "MetOH",
+                                                                               
+                                                                               "Other")))))))
+#algn_hopa_g$type <- as.factor(algn_hopa_g$type)
+algn_hopa_class_gat <-algn_hopa_class_gat %>% group_by(groups, rep, type, class) %>% summarise_all(funs(mean))
+
+
+lip <- table(algn_hopa_class_gat$class)
+lip_levels <- names(lip)[order(lip)]
+algn_hopa_class_gat$class <- factor(algn_hopa_class_gat$class, levels = lip_levels)
+
+
+ggplot(algn_hopa_class_gat, aes(x = factor(class), y= num, col = groups)) + 
+  geom_point(size = 0.1, position = position_dodge(width = 0.5))+
+  facet_grid(. ~ type, scales = "free_y") +
+  theme(axis.text.x=element_text(angle=90,hjust=1), text = element_text(size=5)) 
+
+algn_hopa_class_gat$class <- as.factor(algn_hopa_class_gat$class)
+#ph red, the rest grey
+ggplot(algn_hopa_class_gat, aes(x = class, y= num, col = groups)) + 
+  
+  geom_point(size = 0.3, position = position_dodge(width = 0.5))+
+  facet_grid(. ~ type, scales = "free_y") +
+  theme(axis.text.x=element_text(angle=90,hjust=1), text = element_text(size=5))+
+  scale_colour_manual(values=c("MetOH" = "grey50", "Growth stage" = "grey50","Ph" = "red","NaCl" = "grey50", "Temperature" = "grey50")) + theme_bw()
+
+
+  scale_colour_manual(values=c("MetOH" = "grey50", "Growth stage" = "grey50","Ph" = "red","NaCl" = "grey50", "Temperature" = "grey50"))
+  
+  
+  
+#box plot added
+fill <- "#4271AE"
+lines <- "#1F3552"
+ggplot(algn_hopa_class_gat, aes(x = class, y= num, col = groups)) +
+   geom_boxplot(colour = "grey", fill= "white", alpha = 0.7)+
+  geom_jitter( size = 0.4)+
+  facet_grid(. ~ type, scales = "free_y") +
+  theme(axis.text.x=element_text(angle=90,hjust=1), text = element_text(size=5)) + theme_bw()
+
+#for each group
+ggplot(algn_hopa_class_gat, aes(x = class, y= num, col = groups)) +
+   geom_boxplot()+
+  geom_jitter( size = 0.4, position = position_dodge(width = 0.5))+
+  facet_grid(. ~ type, scales = "free_y") +
+  theme(axis.text.x=element_text(angle=90,hjust=1), text = element_text(size=5)) + theme_bw()
+```
+
