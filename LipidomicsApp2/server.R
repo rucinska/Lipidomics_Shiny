@@ -1,3 +1,8 @@
+#https://github.com/smouksassi/ggplotwithyourdata/blob/master/miniapp_exportplots/app.css
+#https://github.com/smouksassi/ggplotwithyourdata
+#https://pharmacometrics.shinyapps.io/ggplotwithyourdata/
+#https://github.com/isop-phmx/GGplot-Shiny/blob/master/GGPLOTSHINY.Rmd
+
 server <- shinyServer(function(input, output, session) {
   # added "session" because updateSelectInput requires it
   values <- reactiveValues(
@@ -46,6 +51,8 @@ server <- shinyServer(function(input, output, session) {
   updateSelectInput(session, inputId = 'nonexp', label = 'Not experimanetal conditions',
                     choices = names(filtereddata()))
   
+  updateSelectInput(session, inputId = 'nonexp2', label = 'Not experimanetal conditions',
+                        choices = names(filtereddata()))
   #updateSelectInput(session, inputId = 'xcol', label = 'X Variable',
   #                choices = names(filtereddata()))
   })
@@ -71,14 +78,64 @@ server <- shinyServer(function(input, output, session) {
             axis.ticks.length=unit(0.5,"cm"),
             legend.text=element_text(size=10)) +
       labs(title = input$plotTitle, x = input$xlab, y = input$ylab, color = " ")+
-      scale_color_manual(labels = c("Lipid Abundance", "Mean"), values = c("red", "black"))
+      scale_color_manual(labels = c(input$Legend, "Mean"), values = c("red", "black"))
     
+  })
+  
+  PCA <- reactive({
+    gat_pca <- gather(filtereddata(),  replicate, membr_perc, -one_of(input$nonexp2) )
+    gat_pca <- select(gat_pca,-c(2,3))
+    
+    
+    wt_spread <- spread(gat_pca, WT, membr_perc)
+    #rownames(lip_db_gather) <- lip_db_gather$con_type
+    #lip_temp_gather<- lip_temp_gather%>% separate(con_type, into = c("type", "con"),sep =  "_")
+    wt_spread$replicate <- make.names(wt_spread$replicate, unique=TRUE)
+    rownames(wt_spread) <- wt_spread$replicate
+    wt_spread <- select(wt_spread,-replicate)
+    
+    
+    
+    wt.rep <- rownames(wt_spread)
+    wt.rep<-sub("^X","",wt.rep)
+    wt.rep<-sub("\\d{1}$","",wt.rep)
+    wt.rep<-sub("\\.$","",wt.rep) #remomve dot at the end
+    
+    
+    prin_comp_wttwmp <- prcomp(wt_spread, scale. = T)
+    
+    
+    ggbiplot(prin_comp_wttwmp, 
+             obs.scale = 1, 
+             var.scale = 1,
+             groups = wt.rep ,
+             var.axes = FALSE,
+             ellipse = FALSE) +
+      #label = wt.rep)
+      geom_point(aes( colour=wt.rep), size = 1) +
+      geom_text_repel(aes(label = wt.rep, 
+                          col =wt.rep),
+                      size = 2,
+                      segment.color = 'grey50')+
+      theme_bw()+  
+      theme( legend.position = "none") +
+      labs(title = input$plotTitle2, x = input$xlab2, y = input$ylab2, color = " ")
+    
+    
+
   })
   
   output$MyPlot <- renderPlot({
     plot_object()
     
   })
+  
+  output$PCA <- renderPlot({
+    PCA()
+    
+  })
+  
+  
   # When the save button is clicked, add the plot to a list and clear the input
   observeEvent(input$save_plot_btn, {
     plot_name <- trimws(input$save_plot_name)
@@ -105,7 +162,8 @@ server <- shinyServer(function(input, output, session) {
   })
   save_plot <- function() {
     shinyjs::show("save_plot_checkmark")
-    values$plots[[trimws(input$save_plot_name)]] <- plot_object()
+    values$plots[[trimws(input$save_plot_name)]] <- plot_object() 
+    #values$plots[[trimws(input$save_plot_name)]] <- PCA()
     updateTextInput(session, "save_plot_name", value = "")
     shinyjs::delay(
       1000,

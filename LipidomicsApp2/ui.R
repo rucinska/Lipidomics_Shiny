@@ -4,6 +4,8 @@ library(DT)
 library(tidyr)
 library(dplyr)
 library(shinyjs)
+library(ggrepel)
+library(ggbiplot)
 
 inline_ui <- function(tag) {
   div(style = "display: inline-block", tag)
@@ -54,10 +56,10 @@ ui <- shinyUI(fluidPage(
                  textInput('xlab', 'X axis label', value = ""),
                  textInput('ylab', 'Y axis label', value = ""),
                  textInput('plotTitle', 'Plot title', value = ""),
+                 textInput('Legend', 'Legend', value = "Lipid Abundance"),
                  selectInput('legendposition', label ='Legend Position',
-                  choices=c("left", "right", "bottom", "top"),
-                  multiple=FALSE, selectize=TRUE,selected="bottom")
-                 
+                             choices=c("left", "right", "bottom", "top"),
+                             multiple=FALSE, selectize=TRUE,selected="bottom")
                 
                ),
                mainPanel(
@@ -82,6 +84,49 @@ ui <- shinyUI(fluidPage(
              ) #end mainPanel
     )
     ),#end tabPanel
+    tabPanel("PCA",
+             pageWithSidebar(
+               headerPanel('Principal Component Analysis'),
+               
+               sidebarPanel(
+                 helpText(em("Note: Select velues that are not experimanetal conditions.")),
+                 # "Empty inputs" - they will be updated after the data is uploaded
+                 selectInput('nonexp2', "Not experimanetal conditions", "", multiple = TRUE),
+                 textInput('xlab2', 'X axis label', value = "PC1"),
+                 textInput('ylab2', 'Y axis label', value = "PC2"),
+                 textInput('plotTitle2', 'Plot title', value = "Principal Componet Analysis")
+                 
+                 
+                 
+                 
+               ),
+               mainPanel(
+                 column(
+                   8,
+                   plotOutput('PCA'),
+                   div(
+                     id = "save_plot_area2",
+                     inline_ui(
+                       textInput("save_plot_name2", NULL, "",
+                                 placeholder = "Enter plot name to save")
+                     ),
+                     actionButton("save_plot_btn2", "Save plot", icon = icon("star")),
+                     shinyjs::hidden(
+                       span(
+                         id = "save_plot_checkmark2",
+                         icon("check")
+                       )
+                     )
+                   )
+                 )
+               ) #end mainPanel
+             )
+      
+      
+    ),#END tabPanel
+    
+    
+    
     tabPanel("Export",
       conditionalPanel(
         condition = "!output.saved_plots_exist",
