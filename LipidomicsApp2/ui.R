@@ -105,15 +105,15 @@ ui <- shinyUI(fluidPage(
                    8,
                    plotOutput('PCA'),
                    div(
-                     id = "save_plot_area2",
+                     id = "save_plot_area",
                      inline_ui(
-                       textInput("save_plot_name2", NULL, "",
+                       textInput("save_plot_name_pca", NULL, "",
                                  placeholder = "Enter plot name to save")
                      ),
-                     actionButton("save_plot_btn2", "Save plot", icon = icon("star")),
+                     actionButton("save_plot_btn_pca", "Save plot", icon = icon("star")),
                      shinyjs::hidden(
                        span(
-                         id = "save_plot_checkmark2",
+                         id = "save_plot_checkmark_pca",
                          icon("check")
                        )
                      )

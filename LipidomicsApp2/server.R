@@ -156,14 +156,38 @@ server <- shinyServer(function(input, output, session) {
       save_plot()
     }
   })
+  
+  observeEvent(input$save_plot_btn_pca, {
+    plot_name <- trimws(input$save_plot_name_pca)
+    
+    if (plot_name %in% names(values$plots)) {
+      showModal(
+        modalDialog(
+          "You already have a plot saved with the same name. Saving this plot will override the existing plot.",
+          footer = tagList(
+            modalButton("Cancel"),
+            actionButton("save_plot_duplicate_confirm_pca", "OK",
+                         class = "btn-primary")
+          ),
+          size = "m"
+        )
+      )
+    } else {
+      save_plot_pca()
+    }
+  })
+  
   observeEvent(input$save_plot_duplicate_confirm, {
     save_plot()
+    removeModal()
+  })
+  observeEvent(input$save_plot_duplicate_confirm_pca, {
+    save_plot_pca()
     removeModal()
   })
   save_plot <- function() {
     shinyjs::show("save_plot_checkmark")
     values$plots[[trimws(input$save_plot_name)]] <- plot_object() 
-    #values$plots[[trimws(input$save_plot_name)]] <- PCA()
     updateTextInput(session, "save_plot_name", value = "")
     shinyjs::delay(
       1000,
@@ -174,6 +198,22 @@ server <- shinyServer(function(input, output, session) {
   # Disable the "save" button if the plot name input is empty
   observe({
     shinyjs::toggleState("save_plot_btn",
+                         condition = nzchar(trimws(input$save_plot_name)))
+    
+  })
+  save_plot_pca <- function() {
+    shinyjs::show("save_plot_checkmark_pca")
+    values$plots[[trimws(input$save_plot_name_pca)]] <- PCA()
+    updateTextInput(session, "save_plot_name_pca", value = "")
+    shinyjs::delay(
+      1000,
+      shinyjs::hide("save_plot_checkmark_pca", anim = TRUE, animType = "fade")
+    )
+  }
+  
+  # Disable the "save" button if the plot name input is empty
+  observe({
+    shinyjs::toggleState("save_plot_btn_pca",
                          condition = nzchar(trimws(input$save_plot_name)))
   })
   
