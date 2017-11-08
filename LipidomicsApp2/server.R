@@ -125,6 +125,74 @@ server <- shinyServer(function(input, output, session) {
 
   })
   
+  BoxPlot <- reactive({
+    if (input$type == "DB") {
+      bx_data <- filtereddata() %>% select( -c(WT,length))
+      bx_data_gat <- bx_data %>% gather(rep, num, -one_of("DB"))
+      
+      
+    } else if(input$type == "length") {
+      bx_data <- filtereddata() %>% select( -c(WT,DB))
+      bx_data_gat <- bx_data %>% gather(rep, num, -one_of("length"))
+    } else {
+      bx_data <- filtereddata() %>% select( -c(DB,length))
+      bx_data<-bx_data%>%separate(WT, into = c("WT", "bal"),sep =  " ")
+      bx_data <- bx_data %>% select(-bal)
+      bx_data_gat <- bx_data %>% gather(rep, num, -one_of("WT"))
+      bx_data_gat$WT <-  sub("^m", "", bx_data_gat$WT )
+      bx_data_gat$WT <-  sub("DIP", "DIPs", bx_data_gat$WT )
+      #wt_class_gat_sum <-wt_class_gat %>% group_by(rep, class) %>% summarise_all(funs(sum(.)))
+    }
+    #gat_pca <- gather(filtereddata(),  replicate, membr_perc, -one_of(input$nonexp2) )
+  
+    bx_data_gat_sum <- bx_data_gat %>%
+      group_by(rep) %>%                     
+      dplyr::mutate(sumper=num/sum(num))%>%
+      group_by_("rep",input$type)%>%
+      dplyr::summarise(Per=sum(sumper)*100)
+    
+    
+    #wt_class_gat_sum$rep<-sub("X","",wt_class_gat_sum$rep)
+    bx_data_gat_sum$rep<-sub("\\d$","",bx_data_gat_sum$rep)
+    bx_data_gat_sum$rep<-sub("\\.$","",bx_data_gat_sum$rep)
+    
+    
+    
+    gs <- c("early", "mid", "late", "stat")
+    bx_data_gat_sum$groups <- ifelse(grepl("TX",bx_data_gat_sum$rep), "TX", 
+                                     ifelse(grepl("4",bx_data_gat_sum$rep),"Temperature", 
+                                            ifelse(grepl("13",bx_data_gat_sum$rep),"Temperature", 
+                                                   ifelse(grepl("30",bx_data_gat_sum$rep),"Temperature",
+                                                          ifelse(grepl("20",bx_data_gat_sum$rep),"Temperature",
+                                                                 ifelse(grepl(paste(gs, collapse = "|"), bx_data_gat_sum$rep),"Growth stage",
+                                                                        ifelse(grepl("Na",bx_data_gat_sum$rep), "NaCl",
+                                                                               ifelse(grepl("Met",bx_data_gat_sum$rep), "MetOH",
+                                                                                      "Other"))))))))
+    if(input$type == "DB"){
+      bx_data_gat_sum$DB <- factor(bx_data_gat_sum$DB, levels = c("1","2","3","4"))
+    } else if(input$type == "length"){                                                                                
+      bx_data_gat_sum$length <- factor(bx_data_gat_sum$length, levels = c("32","34","36","64","68", "70", "72"))
+    } else {
+      bx_data_gat_sum$WT <- factor(bx_data_gat_sum$WT, levels = c("PG","PE","PC","CL","DIPs"))
+    }
+    
+    
+    fill <- "#4271AE"
+    lines <- "#1F3552"
+    ggplot(bx_data_gat_sum, aes_string(x =input$type, y= "Per", col = "groups")) +
+      stat_boxplot(geom ='errorbar') +
+      geom_boxplot(colour = "grey", fill= "white")+
+      geom_jitter(size = 0.4, position = position_dodge(width = 0.5))+
+      theme(axis.text.x=element_text(angle=90,hjust=1), text = element_text(size=5)) +  
+      theme_bw()  + 
+      coord_fixed(ratio = 1/10) +
+      labs(title = input$plotTitle3, x = input$xlab3, y = input$ylab3, color = " ")
+    
+
+    
+     })
+  
+  
   output$MyPlot <- renderPlot({
     plot_object()
     
@@ -135,6 +203,10 @@ server <- shinyServer(function(input, output, session) {
     
   })
   
+  output$BoxPlot <- renderPlot({
+    BoxPlot()
+    
+  })
   
   # When the save button is clicked, add the plot to a list and clear the input
   observeEvent(input$save_plot_btn, {

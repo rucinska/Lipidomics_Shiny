@@ -125,6 +125,53 @@ ui <- shinyUI(fluidPage(
       
     ),#END tabPanel
     
+    tabPanel("Box Plot",
+             pageWithSidebar(
+               headerPanel('Box Plot'),
+               
+               sidebarPanel(
+                 helpText(em("Note: Select for which type you would like to make a boxplot.")),
+                 # "Empty inputs" - they will be updated after the data is uploaded
+                 radioButtons('type', 'Type',
+                              c(DB ='DB',
+                                Length='length',
+                                Class='WT'),
+                              'DB'),
+                 textInput('xlab3', 'X axis label', value = ""),
+                   textInput('ylab3', 'Y axis label', value = "Lipid Abundance [%/mol]"),
+                 textInput('plotTitle3', 'Plot title', value = "")
+                 
+                 
+                 
+                 
+               ),
+               mainPanel(
+                 column(
+                   8,
+                   plotOutput('BoxPlot'),
+                   div(
+                     id = "save_plot_area",
+                     inline_ui(
+                       textInput("save_plot_name_boxplot", NULL, "",
+                                 placeholder = "Enter plot name to save")
+                     ),
+                     actionButton("save_plot_btn_boxplot", "Save plot", icon = icon("star")),
+                     shinyjs::hidden(
+                       span(
+                         id = "save_plot_checkmark_boxplot",
+                         icon("check")
+                       )
+                     )
+                   )
+                 )
+               ) #end mainPanel
+             )
+             
+             
+    ),#END tabPanel
+    
+    
+    
     
     
     tabPanel("Export",
