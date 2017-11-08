@@ -186,7 +186,8 @@ server <- shinyServer(function(input, output, session) {
       theme(axis.text.x=element_text(angle=90,hjust=1), text = element_text(size=5)) +  
       theme_bw()  + 
       coord_fixed(ratio = 1/10) +
-      labs(title = input$plotTitle3, x = input$xlab3, y = input$ylab3, color = " ")
+      labs(title = input$plotTitle3, x = input$xlab3, y = input$ylab3, color = " ")+
+      ylim(0,100)
     
 
     
@@ -249,6 +250,27 @@ server <- shinyServer(function(input, output, session) {
     }
   })
   
+  observeEvent(input$save_plot_btn_boxplot, {
+    plot_name <- trimws(input$save_plot_name_boxplot)
+    
+    if (plot_name %in% names(values$plots)) {
+      showModal(
+        modalDialog(
+          "You already have a plot saved with the same name. Saving this plot will override the existing plot.",
+          footer = tagList(
+            modalButton("Cancel"),
+            actionButton("save_plot_duplicate_confirm_boxplot", "OK",
+                         class = "btn-primary")
+          ),
+          size = "m"
+        )
+      )
+    } else {
+      save_plot_boxplot()
+    }
+  })
+  
+  
   observeEvent(input$save_plot_duplicate_confirm, {
     save_plot()
     removeModal()
@@ -257,6 +279,11 @@ server <- shinyServer(function(input, output, session) {
     save_plot_pca()
     removeModal()
   })
+  observeEvent(input$save_plot_duplicate_confirm_boxplot, {
+    save_plot_boxplot()
+    removeModal()
+  })
+  ### LIPID ABUNDANCE
   save_plot <- function() {
     shinyjs::show("save_plot_checkmark")
     values$plots[[trimws(input$save_plot_name)]] <- plot_object() 
@@ -273,6 +300,7 @@ server <- shinyServer(function(input, output, session) {
                          condition = nzchar(trimws(input$save_plot_name)))
     
   })
+  ### PCA
   save_plot_pca <- function() {
     shinyjs::show("save_plot_checkmark_pca")
     values$plots[[trimws(input$save_plot_name_pca)]] <- PCA()
@@ -286,6 +314,22 @@ server <- shinyServer(function(input, output, session) {
   # Disable the "save" button if the plot name input is empty
   observe({
     shinyjs::toggleState("save_plot_btn_pca",
+                         condition = nzchar(trimws(input$save_plot_name)))
+  })
+  ### BOX PLOT
+  save_plot_boxplot <- function() {
+    shinyjs::show("save_plot_checkmark_boxplot")
+    values$plots[[trimws(input$save_plot_name_boxplot)]] <- BoxPlot()
+    updateTextInput(session, "save_plot_name_boxplot", value = "")
+    shinyjs::delay(
+      1000,
+      shinyjs::hide("save_plot_checkmark_boxplot", anim = TRUE, animType = "fade")
+    )
+  }
+  
+  # Disable the "save" button if the plot name input is empty
+  observe({
+    shinyjs::toggleState("save_plot_btn_boxplot",
                          condition = nzchar(trimws(input$save_plot_name)))
   })
   
