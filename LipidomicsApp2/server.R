@@ -44,29 +44,29 @@ server <- shinyServer(function(input, output, session) {
   })
   
   observeEvent(data(), {
-    updateSelectInput(session, "select", choices=colnames(data()))
+    updateSelectInput(session, "select", choices=colnames(data()), selected = c("class", "length", "DB"))
     
   })
-  observeEvent(filtereddata(), {
-  updateSelectInput(session, inputId = 'nonexp', label = 'Not experimanetal conditions',
-                    choices = names(filtereddata()))
+  #observeEvent(filtereddata(), {
+  #updateSelectInput(session, inputId = 'nonexp', label = 'Not experimanetal conditions',
+   #                 choices = names(filtereddata()))
   
-  updateSelectInput(session, inputId = 'nonexp2', label = 'Not experimanetal conditions',
-                        choices = names(filtereddata()))
+  #updateSelectInput(session, inputId = 'nonexp2', label = 'Not experimanetal conditions',
+   #                     choices = names(filtereddata()))
   #updateSelectInput(session, inputId = 'xcol', label = 'X Variable',
   #                choices = names(filtereddata()))
-  })
+  #})
   
   output$contents <- renderDataTable(filtereddata())
 
   plot_object <- reactive({
-    gat <- gather(filtereddata(), rep, num, -one_of(input$nonexp) )
+    gat <- gather(filtereddata(), rep, num, -one_of("class", "length", "DB") )
     #gat$rep<-sub("\\d$","",gat$rep)
     #x <- ggplot(gat, aes(x = rep, y = num)) + geom_point() + theme(axis.text.x=element_text(angle=90,hjust=1))
     # gat <- gather(filtereddata(), rep, num, gather_cols = input$ycol, -one_of(input$xcol) )
     
-    gat[,1] <- factor(gat[,1], levels=unique(gat[,1]))
-    ggplot(gat, aes(x = gat[,1], y= num, col = "Lipid Abundance")) + 
+    gat$class <- factor(gat$class, levels=unique(gat$class))
+    ggplot(gat, aes(x = class, y= num, col = "Lipid Abundance")) + 
       geom_point(size = 0.4, position = position_dodge(width = 0.3)) +
       stat_summary(fun.y= "mean", aes( group=1, colour = "Mean"), geom="point",size = 0.5, show.legend = TRUE )+ 
       theme_bw() +
@@ -83,27 +83,23 @@ server <- shinyServer(function(input, output, session) {
   })
   
   PCA <- reactive({
-    gat_pca <- gather(filtereddata(),  replicate, membr_perc, -one_of(input$nonexp2) )
-    gat_pca <- select(gat_pca,-c(2,3))
-    
-    
-    wt_spread <- spread(gat_pca, WT, membr_perc)
+    gat_pca <- gather(filtereddata(),  replicate, membr_perc, -one_of("class", "length", "DB") )
+    gat_pca <- select(gat_pca,-c(length, DB))
+ 
+    wt_spread <- spread(gat_pca, class, membr_perc)
     #rownames(lip_db_gather) <- lip_db_gather$con_type
     #lip_temp_gather<- lip_temp_gather%>% separate(con_type, into = c("type", "con"),sep =  "_")
     wt_spread$replicate <- make.names(wt_spread$replicate, unique=TRUE)
     rownames(wt_spread) <- wt_spread$replicate
     wt_spread <- select(wt_spread,-replicate)
     
-    
-    
     wt.rep <- rownames(wt_spread)
     wt.rep<-sub("^X","",wt.rep)
     wt.rep<-sub("\\d{1}$","",wt.rep)
     wt.rep<-sub("\\.$","",wt.rep) #remomve dot at the end
+    wt.rep<- factor(wt.rep)
     
-    
-    prin_comp_wttwmp <- prcomp(wt_spread, scale. = T)
-    
+    prin_comp_wttwmp <- prcomp(wt_spread)
     
     ggbiplot(prin_comp_wttwmp, 
              obs.scale = 1, 
@@ -112,11 +108,10 @@ server <- shinyServer(function(input, output, session) {
              var.axes = FALSE,
              ellipse = FALSE) +
       #label = wt.rep)
-      geom_point(aes( colour=wt.rep), size = 1) +
-      geom_text_repel(aes(label = wt.rep, 
-                          col =wt.rep),
-                      size = 2,
-                      segment.color = 'grey50')+
+      #geom_point(aes( colour=wt.rep), size = 1) +
+      geom_text_repel(label = wt.rep,
+                   size = 2,
+                   segment.color = 'grey50')+
       theme_bw()+  
       theme( legend.position = "none") +
       labs(title = input$plotTitle2, x = input$xlab2, y = input$ylab2, color = " ")
@@ -127,20 +122,24 @@ server <- shinyServer(function(input, output, session) {
   
   BoxPlot <- reactive({
     if (input$type == "DB") {
-      bx_data <- filtereddata() %>% select( -c(WT,length))
+      bx_data <- filtereddata() %>% 
+        filter(!(class %in% c("DIP","mDIP") | DB == '0' )) %>%
+        select( -c(class,length))
       bx_data_gat <- bx_data %>% gather(rep, num, -one_of("DB"))
       
       
     } else if(input$type == "length") {
-      bx_data <- filtereddata() %>% select( -c(WT,DB))
+      bx_data <- filtereddata() %>% 
+        filter(!(class %in% c("DIP","mDIP")| DB == '0' )) %>%
+        select( -c(class,DB))
       bx_data_gat <- bx_data %>% gather(rep, num, -one_of("length"))
     } else {
       bx_data <- filtereddata() %>% select( -c(DB,length))
-      bx_data<-bx_data%>%separate(WT, into = c("WT", "bal"),sep =  " ")
+      bx_data<-bx_data%>%separate(class, into = c("class", "bal"),sep =  " ")
       bx_data <- bx_data %>% select(-bal)
-      bx_data_gat <- bx_data %>% gather(rep, num, -one_of("WT"))
-      bx_data_gat$WT <-  sub("^m", "", bx_data_gat$WT )
-      bx_data_gat$WT <-  sub("DIP", "DIPs", bx_data_gat$WT )
+      bx_data_gat <- bx_data %>% gather(rep, num, -one_of("class"))
+      bx_data_gat$class <-  sub("^m", "", bx_data_gat$class )
+      bx_data_gat$class <-  sub("DIP", "DIPs", bx_data_gat$class )
       #wt_class_gat_sum <-wt_class_gat %>% group_by(rep, class) %>% summarise_all(funs(sum(.)))
     }
     #gat_pca <- gather(filtereddata(),  replicate, membr_perc, -one_of(input$nonexp2) )
@@ -169,11 +168,11 @@ server <- shinyServer(function(input, output, session) {
                                                                                ifelse(grepl("Met",bx_data_gat_sum$rep), "MetOH",
                                                                                       "Other"))))))))
     if(input$type == "DB"){
-      bx_data_gat_sum$DB <- factor(bx_data_gat_sum$DB, levels = c("1","2","3","4"))
+      bx_data_gat_sum$DB <- factor(bx_data_gat_sum$DB, levels = c(unique(bx_data_gat_sum$DB)))
     } else if(input$type == "length"){                                                                                
-      bx_data_gat_sum$length <- factor(bx_data_gat_sum$length, levels = c("32","34","36","64","68", "70", "72"))
+      bx_data_gat_sum$length <- factor(bx_data_gat_sum$length, levels = c(unique(bx_data_gat_sum$length)))
     } else {
-      bx_data_gat_sum$WT <- factor(bx_data_gat_sum$WT, levels = c("PG","PE","PC","CL","DIPs"))
+      bx_data_gat_sum$class <- factor(bx_data_gat_sum$class, levels = c(unique(bx_data_gat_sum$class)))
     }
     
     
@@ -188,10 +187,206 @@ server <- shinyServer(function(input, output, session) {
       coord_fixed(ratio = 1/10) +
       labs(title = input$plotTitle3, x = input$xlab3, y = input$ylab3, color = " ")+
       ylim(0,100)
-    
-
-    
      })
+  
+  
+  
+  ### SD
+  SD <- reactive({
+  sd_lipid <- filtereddata() %>% select( -c(DB,length))
+  
+  #SD for total
+  sd_lipid <- sd_lipid %>% 
+    select(-class) %>%
+    rowwise() %>% 
+    do(data.frame( sd_total = sd(unlist(.)))) %>% 
+    bind_cols(sd_lipid, .)
+  
+  #SD for TX
+  sd_lipid <- sd_lipid %>% 
+    select(starts_with("TX")) %>%
+    rowwise() %>% 
+    do(data.frame(sd_TX = sd(unlist(.)))) %>% 
+    bind_cols(sd_lipid, .)
+  
+  #SD for gs
+  sd_lipid <- sd_lipid %>% 
+    select(starts_with("early"),starts_with("mid"),starts_with("late"),starts_with("stat")) %>%
+    rowwise() %>% 
+    do(data.frame(sd_gs = sd(unlist(.)))) %>% 
+    bind_cols(sd_lipid, .)
+  
+  #SD for temp
+  sd_lipid <- sd_lipid %>% 
+    select(starts_with("13"),starts_with("20"), starts_with("early"),starts_with("4") )%>%
+    rowwise() %>% 
+    do(data.frame(sd_temp = sd(unlist(.))))%>% 
+    bind_cols(sd_lipid, .)
+  
+  #SD for NaCl
+  sd_lipid <- sd_lipid %>% 
+    select(starts_with("Na")) %>%
+    rowwise() %>% 
+    do(data.frame(sd_NaCl = sd(unlist(.)))) %>% 
+    bind_cols(sd_lipid, .)
+  
+  #SD for MetOh
+  sd_lipid <- sd_lipid %>% 
+    select(starts_with("Met")) %>%
+    rowwise() %>% 
+    do(data.frame(sd_Met = sd(unlist(.)))) %>% 
+    bind_cols(sd_lipid, .)
+  
+  sd_all <- sd_lipid %>% 
+    select(starts_with("sd"), class)
+  
+  sd_all_gat <- sd_all %>% gather(sd, mean, -one_of("class")) %>% tbl_df()
+  
+  if(input$conditions == "gs") {
+    sd_all <- sd_all %>% group_by(class) %>%
+      mutate(mean_gs = mean(sd_gs))
+    
+    
+    
+     ggplot(sd_all, aes(x =reorder(class, sd_gs), y= sd_gs)) + 
+      geom_point(aes(colour = cut(sd_gs, c(-Inf, mean_gs[1], Inf))),
+                 size = 1) +
+      coord_flip(ylim = c(0,input$obs)) +
+      geom_hline(aes(yintercept = mean_gs,linetype = "Mean")) +
+      scale_linetype_manual(name = " ", values = 1 )  +
+      
+      theme_bw()+
+      theme(axis.text.x = element_text(angle = 0, hjust = 1)
+      )+
+      labs(title = input$plotTitle4, x = input$xlab4, y = input$ylab4, color = " ") +
+      scale_color_manual(name = " ",
+                         values = c( "black",
+                                     "red"),
+                         labels = c("below mean", "over mean"))
+  } else if(input$conditions == "sd_total"){
+    sd_all <- sd_all %>% group_by(class) %>%
+      mutate(sd_tot = mean(sd_total))
+    #order variables base on number
+    sd_all <- sd_all[with(sd_all, order(sd_total)), ]
+    
+     ggplot(sd_all, aes(x =reorder(class, sd_total), y= sd_total)) + 
+      geom_point(aes(colour = cut(sd_total, c(-Inf, sd_tot[1], Inf))),
+                 size = 1) +
+      coord_flip(ylim = c(0,input$obs)) +
+      geom_hline(aes(yintercept = sd_tot,linetype = "Mean")) +
+      scale_linetype_manual(name = " ", values = 1 )  +
+      
+      theme_bw()+
+      theme(axis.text.x = element_text(angle = 0, hjust = 1)
+      )+
+       labs(title = input$plotTitle4, x = input$xlab4, y = input$ylab4, color = " ") +
+      scale_color_manual(name = " ",
+                         values = c( "black",
+                                     "red"),
+                         labels = c("below mean", "over mean"))
+  }else if(input$conditions == "temp"){
+    sd_all <- sd_all %>% group_by(class) %>%
+      mutate(mean_temp = mean(sd_temp))
+    
+   ggplot(sd_all, aes(x =reorder(class, sd_temp), y= sd_temp)) + 
+      geom_point(aes(colour = cut(sd_temp, c(-Inf, mean_temp[1], Inf))),
+                 size = 1) +
+      coord_flip(ylim = c(0,input$obs)) +
+      geom_hline(aes(yintercept = mean_temp,linetype = "Mean")) +
+      scale_linetype_manual(name = " ", values = 1 )  +
+      
+      theme_bw()+
+      theme(axis.text.x = element_text(angle = 0, hjust = 1)
+      )+
+      labs(title = input$plotTitle4, x = input$xlab4, y = input$ylab4, color = " ") +
+      scale_color_manual(name = " ",
+                         values = c( "black",
+                                     "red"),
+                         labels = c("below mean", "over mean"))
+  }else if(input$conditions == "salt"){
+    sd_all <- sd_all %>% group_by(class) %>%
+      mutate(mean_NaCl = mean(sd_NaCl))
+
+     ggplot(sd_all, aes(x =reorder(class, sd_NaCl), y= sd_NaCl)) + 
+      geom_point(aes(colour = cut(sd_NaCl, c(-Inf, mean_NaCl[1], Inf))),
+                 size = 1) +
+      coord_flip(ylim = c(0,input$obs)) +
+      geom_hline(aes(yintercept = mean_NaCl,linetype = "Mean")) +
+      scale_linetype_manual(name = " ", values = 1 )  +
+      
+      theme_bw()+
+      theme(axis.text.x = element_text(angle = 0, hjust = 1)
+      )+
+      labs(title = input$plotTitle4, x = input$xlab4, y = input$ylab4, color = " ") +
+      scale_color_manual(name = " ",
+                         values = c( "black",
+                                     "red"),
+                         labels = c("below mean", "over mean"))
+  }else if(input$conditions == "met"){
+    sd_all <- sd_all %>% group_by(class) %>%
+      mutate(mean_Met = mean(sd_Met))
+     
+    ggplot(sd_all, aes(x =reorder(class, sd_Met), y= sd_Met)) + 
+      geom_point(aes(colour = cut(sd_Met, c(-Inf, mean_Met[1], Inf))),
+                 size = 1)+
+      coord_flip(ylim = c(0,input$obs)) +
+      geom_hline(aes(yintercept = mean_Met,linetype = "Mean")) +
+      scale_linetype_manual(name = " ", values = 1 )  +
+      
+      theme_bw()+
+      theme(axis.text.x = element_text(angle = 0, hjust = 1)
+      )+
+      labs(title = input$plotTitle4, x = input$xlab4, y = input$ylab4, color = " ") +
+      scale_color_manual(name = " ",
+                         values = c( "black",
+                                     "red"),
+                         labels = c("below mean", "over mean"))
+  }else if(input$conditions == "tri"){
+    sd_all <- sd_all %>% group_by(class) %>%
+      mutate(mean_TX = mean(sd_TX))
+    
+    ggplot(sd_all, aes(x = reorder(class, sd_TX), y= sd_TX)) + 
+      geom_point(aes(colour = cut(sd_TX, c(-Inf, mean_TX[1], Inf))),
+                 size = 1) +
+    coord_flip(ylim = c(0,input$obs)) +
+      geom_hline(aes(yintercept = mean_TX,linetype = "Mean")) +
+      scale_linetype_manual(name = " ", values = 1 )  +
+      
+      theme_bw()+
+      theme(axis.text.x = element_text(angle = 0, hjust = 1)
+      )+
+      labs(title = input$plotTitle4, x = input$xlab4, y = input$ylab4, color = " ") +
+      scale_color_manual(name = " ",
+                         values = c( "black",
+                                     "red"),
+                         labels = c("below mean", "over mean"))
+  } else {
+      mean_sd <-sd_lipid %>% 
+        select(starts_with("sd"), class) %>%
+        group_by(class) %>% 
+        summarise_all(funs(mean(.) ))
+      names(mean_sd)[names(mean_sd) == "sd_TX"] <- "Triton"
+      names(mean_sd)[names(mean_sd) == "sd_gs"] <- "Growth Stage"
+      names(mean_sd)[names(mean_sd) == "sd_temp"] <- "Temperature"
+      names(mean_sd)[names(mean_sd) == "sd_NaCl"] <- "Salt"
+      names(mean_sd)[names(mean_sd) == "sd_Met"] <- "Methanol"
+      names(mean_sd)[names(mean_sd) == "sd_total"] <- "Total"
+      
+      mean_sd_gat <- mean_sd %>% gather(sd, mean, -one_of("class"))
+      
+      ggplot(mean_sd_gat, aes(x = sd, y= mean)) + 
+        geom_bar(stat = "identity", position = "dodge") +
+        theme(axis.text.x=element_text(size=5, angle=90)) +
+        theme_bw()+
+        labs(title = input$plotTitle4, x = input$xlab4, y = input$ylab4, color = " ")
+
+    }
+  
+  
+  })
+  
+  
+  
   
   
   output$MyPlot <- renderPlot({
@@ -206,6 +401,11 @@ server <- shinyServer(function(input, output, session) {
   
   output$BoxPlot <- renderPlot({
     BoxPlot()
+    
+  })
+  
+  output$SD <- renderPlot({
+    SD()
     
   })
   
@@ -270,6 +470,26 @@ server <- shinyServer(function(input, output, session) {
     }
   })
   
+  observeEvent(input$save_plot_btn_sd, {
+    plot_name <- trimws(input$save_plot_name_sd)
+    
+    if (plot_name %in% names(values$plots)) {
+      showModal(
+        modalDialog(
+          "You already have a plot saved with the same name. Saving this plot will override the existing plot.",
+          footer = tagList(
+            modalButton("Cancel"),
+            actionButton("save_plot_duplicate_confirm_boxplot", "OK",
+                         class = "btn-primary")
+          ),
+          size = "m"
+        )
+      )
+    } else {
+      save_plot_sd()
+    }
+  })
+  
   
   observeEvent(input$save_plot_duplicate_confirm, {
     save_plot()
@@ -283,6 +503,11 @@ server <- shinyServer(function(input, output, session) {
     save_plot_boxplot()
     removeModal()
   })
+  observeEvent(input$save_plot_duplicate_confirm_boxplot, {
+    save_plot_sd()
+    removeModal()
+  })
+  
   ### LIPID ABUNDANCE
   save_plot <- function() {
     shinyjs::show("save_plot_checkmark")
@@ -330,6 +555,22 @@ server <- shinyServer(function(input, output, session) {
   # Disable the "save" button if the plot name input is empty
   observe({
     shinyjs::toggleState("save_plot_btn_boxplot",
+                         condition = nzchar(trimws(input$save_plot_name)))
+  })
+  ### SD
+  save_plot_sd <- function() {
+    shinyjs::show("save_plot_checkmark_sd")
+    values$plots[[trimws(input$save_plot_name_sd)]] <- SD()
+    updateTextInput(session, "save_plot_name_sd", value = "")
+    shinyjs::delay(
+      1000,
+      shinyjs::hide("save_plot_checkmark_sd", anim = TRUE, animType = "fade")
+    )
+  }
+  
+  # Disable the "save" button if the plot name input is empty
+  observe({
+    shinyjs::toggleState("save_plot_btn_sd",
                          condition = nzchar(trimws(input$save_plot_name)))
   })
   

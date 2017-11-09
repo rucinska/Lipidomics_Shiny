@@ -13,9 +13,9 @@ inline_ui <- function(tag) {
 
 ui <- shinyUI(fluidPage(
 
-  titlePanel("Column Plot"),
+  titlePanel("Lipidomics Data Analysis Application"),
   tabsetPanel(
-    tabPanel("Upload File",
+    tabPanel("Data",
              titlePanel("Uploading Files"),
              sidebarLayout(
                sidebarPanel(
@@ -26,17 +26,17 @@ ui <- shinyUI(fluidPage(
                  
                  # added interface for uploading data from
                  # http://shiny.rstudio.com/gallery/file-upload.html
-                 tags$br(),
+                 #tags$br(),
                  checkboxInput('header', 'Header', TRUE),
                  radioButtons('sep', 'Separator',
                               c(Comma=',',
                                 Semicolon=';',
                                 Tab='\t'),
                               ','),
-                 selectInput("select", "Select columns to display",c(), multiple = TRUE),
-                 helpText(em("Note: Use delete button to de-select columns")),
-                 actionButton("update", "Update Data Set", class = "btn-primary",style='padding:4px; font-size:120%'),
-                 helpText(em("First column will be used as a x axis in the plot!!!"))
+                 selectInput("select", "Select columns to display.",c(), multiple = TRUE),
+                 helpText(em("Note: Use delete button to de-select columns. Make sure you leave class, length and DB column!")),
+                 actionButton("update", "Update Data Set", class = "btn-primary",style='padding:4px; font-size:120%')
+                 #helpText(em("First column will be used as a x axis in the plot!!!"))
                  
                ),
                mainPanel(
@@ -49,9 +49,9 @@ ui <- shinyUI(fluidPage(
                headerPanel('Lipid Abundance'),
                
                sidebarPanel(
-                 helpText(em("Note: Select velues that are not experimanetal conditions.")),
+                 #helpText(em("Note: Select velues that are not experimanetal conditions.")),
                  # "Empty inputs" - they will be updated after the data is uploaded
-                 selectInput('nonexp', "Not experimanetal conditions", "", multiple = TRUE),
+                 #selectInput('nonexp', "Not experimanetal conditions", "", multiple = TRUE),
                  #selectInput('xcol', 'X Variable', "", selected = ""),
                  textInput('xlab', 'X axis label', value = ""),
                  textInput('ylab', 'Y axis label', value = ""),
@@ -89,9 +89,9 @@ ui <- shinyUI(fluidPage(
                headerPanel('Principal Component Analysis'),
                
                sidebarPanel(
-                 helpText(em("Note: Select velues that are not experimanetal conditions.")),
+                 #helpText(em("Note: Select velues that are not experimanetal conditions.")),
                  # "Empty inputs" - they will be updated after the data is uploaded
-                 selectInput('nonexp2', "Not experimanetal conditions", "", multiple = TRUE),
+                 #selectInput('nonexp2', "Not experimanetal conditions", "", multiple = TRUE),
                  textInput('xlab2', 'X axis label', value = "PC1"),
                  textInput('ylab2', 'Y axis label', value = "PC2"),
                  textInput('plotTitle2', 'Plot title', value = "Principal Componet Analysis")
@@ -135,7 +135,7 @@ ui <- shinyUI(fluidPage(
                  radioButtons('type', 'Type',
                               c(DB ='DB',
                                 Length='length',
-                                Class='WT'),
+                                Class='class'),
                               'DB'),
                  textInput('xlab3', 'X axis label', value = ""),
                    textInput('ylab3', 'Y axis label', value = "Lipid Abundance [%/mol]"),
@@ -170,7 +170,55 @@ ui <- shinyUI(fluidPage(
              
     ),#END tabPanel
     
-    
+    tabPanel("Standard Deviation",
+             pageWithSidebar(
+               headerPanel('Standard Deviation'),
+               
+               sidebarPanel(
+                 helpText(em("Note: Select for which conditions you would like to make a standard deviation analysis")),
+                 # "Empty inputs" - they will be updated after the data is uploaded
+                 radioButtons('conditions', 'Conditions',
+                              c(All = 'all',
+                                Total ='sd_total',
+                                GrowthStage ='gs',
+                                Temparature = 'temp',
+                                Salt = 'salt',
+                                Methanol = 'met',
+                                Triton = "tri"
+                                )),
+                 textInput('xlab4', 'X axis label', value = "Lipids"),
+                 textInput('ylab4', 'Y axis label', value = "Standard Deviation"),
+                 textInput('plotTitle4', 'Plot title', value = ""),
+                 numericInput("obs", "Set y axes:", 7)
+                 
+                 
+                 
+                 
+               ),
+               mainPanel(
+                 column(
+                   8,
+                   plotOutput('SD'),
+                   div(
+                     id = "save_plot_area",
+                     inline_ui(
+                       textInput("save_plot_name_sd", NULL, "",
+                                 placeholder = "Enter plot name to save")
+                     ),
+                     actionButton("save_plot_btn_sd", "Save plot", icon = icon("star")),
+                     shinyjs::hidden(
+                       span(
+                         id = "save_plot_checkmark_sd",
+                         icon("check")
+                       )
+                     )
+                   )
+                 )
+               ) #end mainPanel
+             )
+             
+             
+    ),#END tabPanel
     
     
     
@@ -241,8 +289,28 @@ ui <- shinyUI(fluidPage(
           )
         )
       )
-    )#end tabPanel
+    ),#end tabPanel
   
+    tabPanel("How To",
+             h5("1. Upload your data file in CSV format. 3 first columns of your CSV file MUST be class, length, DB - make sure you have them in your data"),
+             h5("2. Any missing values will be automatically replaced with 0!"),                            
+             h5("3. Do not delete class, length, DB columns forom your data! "),
+             
+             h5("4. Sliders for x and y variables appear only for numeric variables."),  
+             h5("5. For more than one y variable stack your data first (using tidyr gather or similar). Then you can use values for y variable and your variable identifier for facetting. You might also want to use Facet Scales: free_x or free_y in the Graph Options tab."),
+             h5("6. The UI is dynamic and changes depending on your choices of options, x ,y, filter, group and so on."),
+             h5("7. There is two slots for Filter variables. Use these to apply exclusions on your data."),
+             h5("8. Filter variable 2 is applied after filter variable 1. Values shown for filter variable 2 will depend on your previous data exclusions via x/y sliders or filter variable 1."),
+             
+             h5("9. If you want to change a numerical variable to categorical include it in the list of Categorical variables and then choose a number of cuts (default is 3). This helps when you want to group or color by cuts of a continuous variable."),
+             h5("10. You can simply change a numeric variable to factor without binning in the treat as categories slot."),
+             h5("11. Download the plot using the options on the 'Download' tab. This section is based on code from Mason DeCamillis ggplotLive app."),
+             h5("12. Visualize the data table in the 'Data' tab. You can reorder the columns, filter and much more."),
+             p(),
+             h5("The application was based on the Samer Mouksassi Shiny App"),
+             h5("Contact me @ samermouksassi@gmail.com for feedback/Bugs/features requests!")
+             
+    )# tabpanel 
     
 ) #end tabsetPanel
 )
