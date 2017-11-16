@@ -35,6 +35,14 @@ ui <- shinyUI(fluidPage(
                               ','),
                  selectInput("select", "Select columns to display.",c(), multiple = TRUE),
                  helpText(em("Note: Use delete button to de-select columns. Make sure you leave class, length and DB column!")),
+                #  checkboxInput("type_multiple", "Analyse Features"),
+                # conditionalPanel(
+                #     condition = "input.type_multiple",
+                #     radioButtons('feat', 'Analysis based on type',
+                #                  c(HeadGroup = 'hg',
+                #                    Length ='len',
+                #                    DoubleBonds ='db'
+                #                  ),"")),
                  actionButton("update", "Update Data Set", class = "btn-primary",style='padding:4px; font-size:120%')
                  #helpText(em("First column will be used as a x axis in the plot!!!"))
                  
@@ -220,7 +228,59 @@ ui <- shinyUI(fluidPage(
              
     ),#END tabPanel
     
-    
+    tabPanel("Feature Investigation",
+             pageWithSidebar(
+               headerPanel('Feature Investigation'),
+               
+               sidebarPanel(
+                 shinyjs::useShinyjs(),
+                 div(
+                 id = "side-panel",
+                 column(6, radioButtons("feat", "Select Feature", c("Head Group", "Length","Double Bonds"), selected = "Head Group")),
+                 column(6, selectInput("hg", "Seperate by Head Group Class", c(), multiple = TRUE)),
+                 tags$hr(),
+                 actionButton("update_input", "Plot"),
+                 hr(),
+                 conditionalPanel(
+                   condition = "input.feat == 'Head Group'", selectInput("feat_gh", "Which Head Groups: ", c(), " ",multiple = TRUE)),
+                 conditionalPanel(
+                   condition = "input.feat == 'Length'", selectInput("feat_len", "Which Length: ", c()," ", multiple = TRUE)),
+                 conditionalPanel(
+                   condition = "input.feat == 'Double Bonds'", selectInput("feat_db", "Which Double Bonds: ",c(),  " ", multiple = TRUE))
+                 ),
+                 
+                 tags$hr(),
+                 actionButton("reset_input", "Reset inputs")
+                 
+                 
+               ),
+               
+              
+               
+               mainPanel(
+                 column(
+                   8,
+                   plotOutput('Detail'),
+                   div(
+                     id = "save_plot_area",
+                     inline_ui(
+                       textInput("save_plot_name_detail", NULL, "",
+                                 placeholder = "Enter plot name to save")
+                     ),
+                     actionButton("save_plot_btn_detail", "Save plot", icon = icon("star")),
+                     shinyjs::hidden(
+                       span(
+                         id = "save_plot_checkmark_detail",
+                         icon("check")
+                       )
+                     )
+                   )
+                 )
+               ) #end mainPanel
+             )
+             
+             
+    ),#END tabPanel
     
     tabPanel("Export",
       conditionalPanel(
@@ -296,19 +356,10 @@ ui <- shinyUI(fluidPage(
              h5("2. Any missing values will be automatically replaced with 0!"),                            
              h5("3. Do not delete class, length, DB columns forom your data! "),
              
-             h5("4. Sliders for x and y variables appear only for numeric variables."),  
-             h5("5. For more than one y variable stack your data first (using tidyr gather or similar). Then you can use values for y variable and your variable identifier for facetting. You might also want to use Facet Scales: free_x or free_y in the Graph Options tab."),
-             h5("6. The UI is dynamic and changes depending on your choices of options, x ,y, filter, group and so on."),
-             h5("7. There is two slots for Filter variables. Use these to apply exclusions on your data."),
-             h5("8. Filter variable 2 is applied after filter variable 1. Values shown for filter variable 2 will depend on your previous data exclusions via x/y sliders or filter variable 1."),
              
-             h5("9. If you want to change a numerical variable to categorical include it in the list of Categorical variables and then choose a number of cuts (default is 3). This helps when you want to group or color by cuts of a continuous variable."),
-             h5("10. You can simply change a numeric variable to factor without binning in the treat as categories slot."),
-             h5("11. Download the plot using the options on the 'Download' tab. This section is based on code from Mason DeCamillis ggplotLive app."),
-             h5("12. Visualize the data table in the 'Data' tab. You can reorder the columns, filter and much more."),
              p(),
-             h5("The application was based on the Samer Mouksassi Shiny App"),
-             h5("Contact me @ samermouksassi@gmail.com for feedback/Bugs/features requests!")
+             h5("The application was based on the Samer Mouksassi Shiny App")
+             
              
     )# tabpanel 
     

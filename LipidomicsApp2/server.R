@@ -41,6 +41,7 @@ server <- shinyServer(function(input, output, session) {
     if(is.null(input$select) || input$select == "")
       data() else 
         data()[, colnames(data()) %in% input$select]
+    
   })
   
   observeEvent(data(), {
@@ -65,7 +66,7 @@ server <- shinyServer(function(input, output, session) {
     #x <- ggplot(gat, aes(x = rep, y = num)) + geom_point() + theme(axis.text.x=element_text(angle=90,hjust=1))
     # gat <- gather(filtereddata(), rep, num, gather_cols = input$ycol, -one_of(input$xcol) )
     
-    gat$class <- factor(gat$class, levels=unique(gat$class))
+    gat$class <- factor(gat$class, levels=(unique(gat$class)))
     ggplot(gat, aes(x = class, y= num, col = "Lipid Abundance")) + 
       geom_point(size = 0.4, position = position_dodge(width = 0.3)) +
       stat_summary(fun.y= "mean", aes( group=1, colour = "Mean"), geom="point",size = 0.5, show.legend = TRUE )+ 
@@ -79,6 +80,11 @@ server <- shinyServer(function(input, output, session) {
             legend.text=element_text(size=10)) +
       labs(title = input$plotTitle, x = input$xlab, y = input$ylab, color = " ")+
       scale_color_manual(labels = c(input$Legend, "Mean"), values = c("red", "black"))
+    
+  })
+  
+  output$MyPlot <- renderPlot({
+    plot_object()
     
   })
   
@@ -119,6 +125,12 @@ server <- shinyServer(function(input, output, session) {
     
 
   })
+  
+  output$PCA <- renderPlot({
+    PCA()
+    
+  })
+  
   
   BoxPlot <- reactive({
     if (input$type == "DB") {
@@ -189,7 +201,10 @@ server <- shinyServer(function(input, output, session) {
       ylim(0,100)
      })
   
-  
+  output$BoxPlot <- renderPlot({
+    BoxPlot()
+    
+  })
   
   ### SD
   SD <- reactive({
@@ -386,28 +401,264 @@ server <- shinyServer(function(input, output, session) {
   })
   
   
-  
-  
-  
-  output$MyPlot <- renderPlot({
-    plot_object()
-    
-  })
-  
-  output$PCA <- renderPlot({
-    PCA()
-    
-  })
-  
-  output$BoxPlot <- renderPlot({
-    BoxPlot()
-    
-  })
-  
   output$SD <- renderPlot({
     SD()
     
   })
+  
+  Detail <- reactive({
+    #if(is.null(input$hg)){
+      if (input$feat == "Double Bonds") {
+        if(is.null(input$hg)){
+          temp_DB<-filtered_data()
+          
+          temp_DB <- select(temp_DB, -c(length, class))
+          
+          temp_DB_gat <- temp_DB %>% gather(rep, num, -one_of("DB"))
+          temp_DB_gat$rep<-sub("\\d$","",temp_DB_gat$rep)
+          temp_DB_gat$rep<-sub("\\.$","",temp_DB_gat$rep)
+          
+          temp_DB_gat <- temp_DB_gat %>% filter()
+          #wt_DB_gat_sum <-wt_DB_gat %>% group_by(rep, DB) %>% summarise_all(funs(sum(.)))
+          temp_DB_gat_sum <-
+            temp_DB_gat%>%
+            group_by(rep) %>%                     
+            dplyr::mutate(sumper=num/sum(num))%>%group_by(rep,DB)%>%
+            dplyr::summarise(Per =sum(sumper)*100, sd = sd(sumper))
+          
+          temp_DB_gat_sum$DB <- factor(temp_DB_gat_sum$DB, levels = c( unique(temp_DB_gat_sum$DB) ) )
+          
+          col_gold <- c('gray20','gray30','gray40','gray60')
+          
+          ggplot(temp_DB_gat_sum, aes(x = rep, y = Per)) + 
+            geom_point(aes(colour = DB), size = 5) +
+            geom_line(aes(colour = DB, group = DB)) +
+            geom_errorbar(aes(ymin=Per-sd, ymax=Per+sd), width=.01) +
+            theme_bw()+
+            #theme(legend.position = "none")+
+            coord_equal(ratio =1/20)+
+            ylim(0,100) 
+        } else{
+              class<-filtered_data()
+              class<-class%>%separate(class, into = c("class", "bal"),sep =  " ")
+              class <- class %>% select(-bal)
+              class$class <-  sub("^m", "", class$class )
+              class$class <-  sub("DIP", "DIPs", class$class )
+              class <- filter(class, class == input$hg)
+              class_gat <- class %>% gather(rep, num, -one_of("class", "DB"))
+
+              class_gat$rep<-sub("\\d$","",class_gat$rep)
+              class_gat$rep<-sub("\\.$","",class_gat$rep)
+
+              class_gat_sum <- class_gat %>%
+                group_by(rep,class) %>%
+                dplyr::mutate(sumper=num/sum(num))%>%
+                group_by(rep,class,DB)%>%
+                dplyr::summarise(Per=sum(sumper)*100, sd=sd(sumper))
+
+              class_gat_sum$class <- factor(class_gat_sum$class, levels = c(unique( class_gat_sum$class)) )
+              class_gat_sum$DB <- factor(class_gat_sum$DB, levels = c(unique(class_gat_sum$DB)))
+
+              ggplot(class_gat_sum, aes(x = rep, y = Per), fill = "gray") +
+                geom_point(aes(colour = DB), size = 5) +
+                geom_line(aes(colour = DB, group = DB)) +
+                facet_grid(. ~ class) +
+                geom_errorbar(aes(ymin=Per-sd, ymax=Per+sd), width=.01) +
+                theme_bw() +
+                #theme(legend.position = "none")+
+                coord_equal(ratio =1/20) +
+                labs(title = "db for each class - only temp")+
+                ylim(0,100)
+        }
+      }
+        else if(input$feat == "Length") {
+          if(is.null(input$hg)){
+              temp_LEN<-filtered_data()
+              temp_LEN <- select(temp_LEN, -class, -DB)
+              temp_len_gat <- temp_LEN %>% gather(rep, num, -one_of("length"))
+              temp_len_gat$rep<-sub("\\d$","",temp_len_gat$rep)
+              temp_len_gat$rep<-sub("\\.$","",temp_len_gat$rep)
+              temp_len_gat <- temp_len_gat %>% filter()
+              #wt_DB_gat_sum <-wt_DB_gat %>% group_by(rep, DB) %>% summarise_all(funs(sum(.)))
+              temp_len_gat_sum <-
+                temp_len_gat%>%
+                group_by(rep) %>%                     
+                dplyr::mutate(sumper=num/sum(num))%>%group_by(rep,length)%>%
+                dplyr::summarise(Per =sum(sumper)*100, sd = sd(sumper))
+              
+              temp_len_gat_sum$length <- factor(temp_len_gat_sum$length, levels = c(unique(temp_len_gat_sum$length)) )
+              
+              col_brown <- c('grey33','grey69','grey88')
+              
+              
+              ggplot(temp_len_gat_sum, aes(x = rep, y = Per)) + 
+                geom_point(aes(color = length), size = 5) +
+                geom_line(aes(colour = length, group = length)) +
+                #geom_dl(aes(label=length),method="last.points")
+                #geom_text_repel(data = last_text, aes(x=rep, y = Per, label = length), hjust = 0, vjust = 0.35)+
+                geom_errorbar(aes(ymin=Per-sd, ymax=Per+sd), width=.01) +
+                theme_bw()+
+                #theme(legend.position = "none")+
+                coord_equal(ratio =1/20)+
+                labs(title = "LENGTH - only temp") +
+                ylim(0,100)
+          } else{
+            class<-filtered_data()
+            class<-class%>%separate(class, into = c("class", "bal"),sep =  " ")
+            class <- class %>% select(-bal)
+            class$class <-  sub("^m", "", class$class )
+            class$class <-  sub("DIP", "DIPs", class$class )
+            class <- filter(class, class == input$hg)
+            class_gat <- class %>% gather(rep, num, -one_of("class", "length"))
+            
+            class_gat$rep<-sub("\\d$","",class_gat$rep)
+            class_gat$rep<-sub("\\.$","",class_gat$rep)
+            
+            class_gat_sum <- class_gat %>%
+              group_by(rep,class) %>%                     
+              dplyr::mutate(sumper=num/sum(num))%>%
+              group_by(rep,class,length)%>%
+              dplyr::summarise(Per=sum(sumper)*100, sd=sd(sumper))
+            
+            class_gat_sum$class <- factor(class_gat_sum$class, levels = c(unique( class_gat_sum$class)) )
+            
+            #temp_byclass_gat_sum$rep <- factor(temp_byclass_gat_sum$rep,
+            #                                  levels = c("4C ","13C ", "20C ", "30C ") )
+            
+            class_gat_sum$length <- factor(class_gat_sum$length, levels = c(unique(class_gat_sum$length)))
+            
+            ggplot(class_gat_sum, aes(x = rep, y = Per), fill = "gray") + 
+              geom_point(aes(colour = length), size = 5) +
+              geom_line(aes(colour = length, group = length)) +
+              facet_grid(. ~ class) +
+              geom_errorbar(aes(ymin=Per-sd, ymax=Per+sd), width=.01) +
+              theme_bw() + 
+              #theme(legend.position = "none")+
+              coord_equal(ratio =1/20) +
+              labs(title = "length for each class - only temp")+
+              ylim(0,100)
+            
+          } 
+          } else {
+              if(is.null(input$hg)){
+                    temp_byclass<-filtered_data()
+                    temp_byclass<-temp_byclass%>%separate(class, into = c("class", "bal"),sep =  " ")
+                    temp_byclass <- temp_byclass %>% select(-bal, - length, -DB)
+                    temp_byclass$class <-  sub("^m", "", temp_byclass$class )
+                    temp_byclass$class <-  sub("DIP", "DIPs", temp_byclass$class )
+                    temp_byclass_gat <- temp_byclass %>% gather(rep, num, -one_of("class"))
+                    temp_byclass_gat$rep<-sub("\\d$","",temp_byclass_gat$rep)
+                    temp_byclass_gat$rep<-sub("\\.$","",temp_byclass_gat$rep)
+                    temp_byclass_gat <- temp_byclass_gat %>% filter()
+                    #wt_DB_gat_sum <-wt_DB_gat %>% group_by(rep, DB) %>% summarise_all(funs(sum(.)))
+                    temp_byclass_gat_sum <-
+                      temp_byclass_gat%>%
+                      group_by(rep) %>%                     
+                      dplyr::mutate(sumper=num/sum(num))%>%group_by(rep,class)%>%
+                      dplyr::summarise(Per =sum(sumper)*100, sd = sd(sumper))
+                    
+                    temp_byclass_gat_sum$class <- factor(temp_byclass_gat_sum$class, levels = c(unique(temp_byclass_gat_sum$class)) )
+                    
+                    col_brown <- c('grey33','grey69','grey88')
+                    
+                    
+                    ggplot(temp_byclass_gat_sum, aes(x = rep, y = Per)) + 
+                      geom_point(aes(color = class), size = 5) +
+                      geom_line(aes(colour = class, group = class)) +
+                      geom_errorbar(aes(ymin=Per-sd, ymax=Per+sd), width=.01) +
+                      theme_bw()+
+                      #theme(legend.position = "none")+
+                      coord_equal(ratio =1/20)+
+                      ylim(0,100)
+          }else{
+            class<-filtered_data()
+            class<-class%>%separate(class, into = c("class", "bal"),sep =  " ")
+            class <- class %>% select(-bal)
+            class$class <-  sub("^m", "", class$class )
+            class$class <-  sub("DIP", "DIPs", class$class )
+            class <- filter(class, class == input$hg)
+        
+            temp_byclass_gat <- class %>% gather(rep, num, -one_of("class"))
+            temp_byclass_gat$rep<-sub("\\d$","",temp_byclass_gat$rep)
+            temp_byclass_gat$rep<-sub("\\.$","",temp_byclass_gat$rep)
+            temp_byclass_gat <- temp_byclass_gat %>% filter()
+            #wt_DB_gat_sum <-wt_DB_gat %>% group_by(rep, DB) %>% summarise_all(funs(sum(.)))
+            temp_byclass_gat_sum <-
+              temp_byclass_gat%>%
+              group_by(rep) %>%                     
+              dplyr::mutate(sumper=num/sum(num))%>%group_by(rep,class)%>%
+              dplyr::summarise(Per =sum(sumper)*100, sd = sd(sumper))
+            
+            temp_byclass_gat_sum$class <- factor(temp_byclass_gat_sum$class, levels = c(unique(temp_byclass_gat_sum$class)) )
+            
+            col_brown <- c('grey33','grey69','grey88')
+            
+            
+            ggplot(temp_byclass_gat_sum, aes(x = rep, y = Per)) + 
+              geom_point(aes(color = class), size = 5) +
+              geom_line(aes(colour = class, group = class)) +
+              facet_grid(. ~ class) +
+              geom_errorbar(aes(ymin=Per-sd, ymax=Per+sd), width=.01) +
+              theme_bw()+
+              #theme(legend.position = "none")+
+              coord_equal(ratio =1/20)+
+              labs(title = "LENGTH - only temp") +
+              ylim(0,100)
+            
+        
+          }
+          }
+    
+ 
+  })
+  observeEvent(input$reset_input, {
+    shinyjs::reset("side-panel")
+    shinyjs::reset("feat")
+    
+  })
+  observeEvent(input$feat, {
+    updateSelectInput(session, "feat_db", choices=unique(filtered_data()$DB))
+  })
+  observeEvent(input$feat, {
+    updateSelectInput(session, "feat_len", choices=unique(filtered_data()$length))
+  })
+  observeEvent(data(), {
+    updateSelectInput(session, "feat_gh", choices=unique(filter_class()$class))
+  })
+
+  
+  filter_class <- reactive({
+    filtereddata() %>%
+      mutate(class = str_replace(class, "m","")) %>%
+      mutate(class = str_replace(class, "\\<DIP\\>", "DIPs")) %>%
+      separate(class, into = c("class", "bal"),sep =  " ") %>% 
+      select(-bal)
+    
+  }) 
+  
+  
+  filtered_data <- eventReactive({
+    input$update_input
+  },  {
+    
+    if(is.null(input$feat_gh)  && is.null(input$feat_db) && is.null(input$feat_len))
+    { filtereddata()
+      }else {
+          if (!is.null(input$feat_gh)) {
+                filter_class() %>% filter(class %in% input$feat_gh)
+        }else if(!is.null(input$feat_db)){ 
+              filter(filtereddata(), DB %in% input$feat_db)
+        } else if(!is.null(input$feat_len)){
+              filter(filtereddata(), length %in% input$feat_len)}
+ #length == input$feat_len)}
+      }
+    #https://stackoverflow.com/questions/30001211/filter-data-frame-for-use-in-multiple-renderplot-functions 
+    })
+  output$Detail <- renderPlot({
+    Detail()
+    
+  })
+  
   
   # When the save button is clicked, add the plot to a list and clear the input
   observeEvent(input$save_plot_btn, {
