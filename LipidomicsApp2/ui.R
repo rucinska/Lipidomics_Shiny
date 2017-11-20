@@ -6,6 +6,7 @@ library(dplyr)
 library(shinyjs)
 library(ggrepel)
 library(ggbiplot)
+library(stringr)
 
 inline_ui <- function(tag) {
   div(style = "display: inline-block", tag)
@@ -16,7 +17,7 @@ ui <- shinyUI(fluidPage(
   titlePanel("Lipidomics Data Analysis Application"),
   tabsetPanel(
     tabPanel("Data",
-             titlePanel("Uploading Files"),
+             titlePanel("Uploading File"),
              sidebarLayout(
                sidebarPanel(
                  fileInput('file1', 'Choose CSV File',
@@ -236,18 +237,20 @@ ui <- shinyUI(fluidPage(
                  shinyjs::useShinyjs(),
                  div(
                  id = "side-panel",
-                 column(6, radioButtons("feat", "Select Feature", c("Head Group", "Length","Double Bonds"), selected = "Head Group")),
-                 column(6, selectInput("hg", "Seperate by Head Group Class", c(), multiple = TRUE)),
-                 tags$hr(),
-                 actionButton("update_input", "Plot"),
+                 radioButtons("feat", "Select Feature", c("Head Group", "Length","Double Bonds"), selected = "Head Group")
+                 
+                 
+                 ),
                  hr(),
                  conditionalPanel(
-                   condition = "input.feat == 'Head Group'", selectInput("feat_gh", "Which Head Groups: ", c(), " ",multiple = TRUE)),
+                   condition = "input.feat == 'Head Group'", selectInput("feat_gh", "Which Head Groups: ", c(),  multiple = TRUE)),
                  conditionalPanel(
-                   condition = "input.feat == 'Length'", selectInput("feat_len", "Which Length: ", c()," ", multiple = TRUE)),
+                   condition = "input.feat == 'Length'", selectInput("feat_len", "Which Length: ", c(), multiple = TRUE)),
                  conditionalPanel(
-                   condition = "input.feat == 'Double Bonds'", selectInput("feat_db", "Which Double Bonds: ",c(),  " ", multiple = TRUE))
-                 ),
+                   condition = "input.feat == 'Double Bonds'", selectInput("feat_db", "Which Double Bonds: ",c(), multiple = TRUE)),
+                 checkboxInput("hg", "Seperate by Head Group Class", FALSE),
+                 tags$hr(),
+                 actionButton("update_input", "Plot"),
                  
                  tags$hr(),
                  actionButton("reset_input", "Reset inputs")
