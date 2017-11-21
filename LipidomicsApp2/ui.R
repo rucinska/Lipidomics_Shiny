@@ -186,15 +186,17 @@ ui <- shinyUI(fluidPage(
                sidebarPanel(
                  helpText(em("Note: Select for which conditions you would like to make a standard deviation analysis")),
                  # "Empty inputs" - they will be updated after the data is uploaded
+                 
                  radioButtons('conditions', 'Conditions',
-                              c(All = 'all',
+                              c(#All = 'all',
                                 Total ='sd_total',
                                 GrowthStage ='gs',
                                 Temparature = 'temp',
                                 Salt = 'salt',
                                 Methanol = 'met',
                                 Triton = "tri"
-                                )),
+                                ), selected = "sd_total"),
+                 checkboxInput("all", "Compare all Standard Deviations", FALSE),
                  textInput('xlab4', 'X axis label', value = "Lipids"),
                  textInput('ylab4', 'Y axis label', value = "Standard Deviation"),
                  textInput('plotTitle4', 'Plot title', value = ""),
@@ -253,9 +255,11 @@ ui <- shinyUI(fluidPage(
                  actionButton("update_input", "Plot"),
                  
                  tags$hr(),
-                 actionButton("reset_input", "Reset inputs")
-                 
-                 
+                 actionButton("reset_input", "Reset inputs"),
+                 hr(),
+                 textInput('xlab5', 'X axis label', value = ""),
+                 textInput('ylab5', 'Y axis label', value = ""),
+                 textInput('plotTitle5', 'Plot title', value = "")
                ),
                
               

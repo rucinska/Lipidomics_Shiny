@@ -209,7 +209,7 @@ server <- shinyServer(function(input, output, session) {
   ### SD
   SD <- reactive({
   sd_lipid <- filtereddata() %>% select( -c(DB,length))
-  
+  #names(filtereddata()) <- sub("^X","",names(filtereddata()))
   #SD for total
   sd_lipid <- sd_lipid %>% 
     select(-class) %>%
@@ -233,7 +233,7 @@ server <- shinyServer(function(input, output, session) {
   
   #SD for temp
   sd_lipid <- sd_lipid %>% 
-    select(starts_with("13"),starts_with("20"), starts_with("early"),starts_with("4") )%>%
+    select(contains("13"),contains("20"), contains("early"),contains("4") )%>%
     rowwise() %>% 
     do(data.frame(sd_temp = sd(unlist(.))))%>% 
     bind_cols(sd_lipid, .)
@@ -256,7 +256,27 @@ server <- shinyServer(function(input, output, session) {
     select(starts_with("sd"), class)
   
   sd_all_gat <- sd_all %>% gather(sd, mean, -one_of("class")) %>% tbl_df()
-  
+  if(input$all){
+    
+    mean_sd <-sd_lipid %>% 
+      select(starts_with("sd"), class) %>%
+      group_by(class) %>%
+      summarise_all(funs(mean(.) ))
+    names(mean_sd)[names(mean_sd) == "sd_TX"] <- "Triton"
+    names(mean_sd)[names(mean_sd) == "sd_gs"] <- "Growth Stage"
+    names(mean_sd)[names(mean_sd) == "sd_temp"] <- "Temperature"
+    names(mean_sd)[names(mean_sd) == "sd_NaCl"] <- "Salt"
+    names(mean_sd)[names(mean_sd) == "sd_Met"] <- "Methanol"
+    names(mean_sd)[names(mean_sd) == "sd_total"] <- "Total"
+    
+    mean_sd_gat <- mean_sd %>% gather(sd, mean, -one_of("class"))
+    
+    ggplot(mean_sd_gat, aes(x = sd, y= mean)) +
+      geom_bar(stat = "identity", position = "dodge") +
+      theme(axis.text.x=element_text(size=5, angle=90)) +
+      theme_bw()+
+      labs(title = input$plotTitle4, x = input$xlab4, y = input$ylab4, color = " ")
+  } else { 
   if(input$conditions == "gs") {
     sd_all <- sd_all %>% group_by(class) %>%
       mutate(mean_gs = mean(sd_gs))
@@ -375,27 +395,30 @@ server <- shinyServer(function(input, output, session) {
                          values = c( "black",
                                      "red"),
                          labels = c("below mean", "over mean"))
-  } else {
-      mean_sd <-sd_lipid %>% 
-        select(starts_with("sd"), class) %>%
-        group_by(class) %>% 
-        summarise_all(funs(mean(.) ))
-      names(mean_sd)[names(mean_sd) == "sd_TX"] <- "Triton"
-      names(mean_sd)[names(mean_sd) == "sd_gs"] <- "Growth Stage"
-      names(mean_sd)[names(mean_sd) == "sd_temp"] <- "Temperature"
-      names(mean_sd)[names(mean_sd) == "sd_NaCl"] <- "Salt"
-      names(mean_sd)[names(mean_sd) == "sd_Met"] <- "Methanol"
-      names(mean_sd)[names(mean_sd) == "sd_total"] <- "Total"
-      
-      mean_sd_gat <- mean_sd %>% gather(sd, mean, -one_of("class"))
-      
-      ggplot(mean_sd_gat, aes(x = sd, y= mean)) + 
-        geom_bar(stat = "identity", position = "dodge") +
-        theme(axis.text.x=element_text(size=5, angle=90)) +
-        theme_bw()+
-        labs(title = input$plotTitle4, x = input$xlab4, y = input$ylab4, color = " ")
-
-    }
+  } #else {
+    #   mean_sd <-sd_lipid %>% 
+    #     select(starts_with("sd"), class) %>%
+    #     group_by(class) %>% 
+    #     summarise_all(funs(mean(.) ))
+    #   names(mean_sd)[names(mean_sd) == "sd_TX"] <- "Triton"
+    #   names(mean_sd)[names(mean_sd) == "sd_gs"] <- "Growth Stage"
+    #   names(mean_sd)[names(mean_sd) == "sd_temp"] <- "Temperature"
+    #   names(mean_sd)[names(mean_sd) == "sd_NaCl"] <- "Salt"
+    #   names(mean_sd)[names(mean_sd) == "sd_Met"] <- "Methanol"
+    #   names(mean_sd)[names(mean_sd) == "sd_total"] <- "Total"
+    #   
+    #   mean_sd_gat <- mean_sd %>% gather(sd, mean, -one_of("class"))
+    #   
+    #   ggplot(mean_sd_gat, aes(x = sd, y= mean)) + 
+    #     geom_bar(stat = "identity", position = "dodge") +
+    #     theme(axis.text.x=element_text(size=5, angle=90)) +
+    #     theme_bw()+
+    #     labs(title = input$plotTitle4, x = input$xlab4, y = input$ylab4, color = " ")
+    # 
+    # }
+  }
+  
+  
   
   
   })
@@ -434,7 +457,8 @@ server <- shinyServer(function(input, output, session) {
             theme_bw()+
             #theme(legend.position = "none")+
             coord_equal(ratio =1/20)+
-            ylim(0,100) 
+            ylim(0,100) +
+            labs(title = input$plotTitle5, x = input$xlab5, y = input$ylab5, color = " ")
       }
           else {
             temp_DB <- select(temp_DB, -c(length))
@@ -458,7 +482,8 @@ server <- shinyServer(function(input, output, session) {
               geom_errorbar(aes(ymin=Per-sd, ymax=Per+sd), width=.01) +
               theme_bw() + 
               coord_equal(ratio =1/20) +
-              ylim(0,100) 
+              ylim(0,100) +
+              labs(title = input$plotTitle5, x = input$xlab5, y = input$ylab5, color = " ")
           }
         }else if(input$feat == "Length") {
           
@@ -488,7 +513,9 @@ server <- shinyServer(function(input, output, session) {
                 #theme(legend.position = "none")+
                 coord_equal(ratio =1/20)+
                 labs(title = "LENGTH - only temp") +
-                ylim(0,100)}
+                ylim(0,100)+
+                labs(title = input$plotTitle5, x = input$xlab5, y = input$ylab5, color = " ")
+              }
         else {
                 temp_LEN <- select(temp_LEN,  -DB)
                 temp_len_gat <- temp_LEN %>% gather(rep, num, -one_of("length","class"))
@@ -511,7 +538,8 @@ server <- shinyServer(function(input, output, session) {
                   geom_errorbar(aes(ymin=Per-sd, ymax=Per+sd), width=.01) +
                   theme_bw() + 
                   coord_equal(ratio =1/20) +
-                  ylim(0,100)
+                  ylim(0,100)+
+                  labs(title = input$plotTitle5, x = input$xlab5, y = input$ylab5, color = " ")
               }
           } else {
    
@@ -541,7 +569,8 @@ server <- shinyServer(function(input, output, session) {
                       theme_bw()+
                       #theme(legend.position = "none")+
                       coord_equal(ratio =1/20)+
-                      ylim(0,100)
+                      ylim(0,100)+
+                      labs(title = input$plotTitle5, x = input$xlab5, y = input$ylab5, color = " ")
                     if(input$hg){
                       p <- p + facet_grid(. ~ class)
                     }
@@ -696,6 +725,25 @@ server <- shinyServer(function(input, output, session) {
     }
   })
   
+  observeEvent(input$save_plot_btn_detail, {
+    plot_name <- trimws(input$save_plot_name_detail)
+    
+    if (plot_name %in% names(values$plots)) {
+      showModal(
+        modalDialog(
+          "You already have a plot saved with the same name. Saving this plot will override the existing plot.",
+          footer = tagList(
+            modalButton("Cancel"),
+            actionButton("save_plot_duplicate_confirm_detail", "OK",
+                         class = "btn-primary")
+          ),
+          size = "m"
+        )
+      )
+    } else {
+      save_plot_detail()
+    }
+  })
   
   observeEvent(input$save_plot_duplicate_confirm, {
     save_plot()
@@ -709,11 +757,14 @@ server <- shinyServer(function(input, output, session) {
     save_plot_boxplot()
     removeModal()
   })
-  observeEvent(input$save_plot_duplicate_confirm_boxplot, {
+  observeEvent(input$save_plot_duplicate_confirm_sd, {
     save_plot_sd()
     removeModal()
   })
-  
+  observeEvent(input$save_plot_duplicate_confirm_detail, {
+    save_plot_detail()
+    removeModal()
+  })
   ### LIPID ABUNDANCE
   save_plot <- function() {
     shinyjs::show("save_plot_checkmark")
@@ -773,10 +824,26 @@ server <- shinyServer(function(input, output, session) {
       shinyjs::hide("save_plot_checkmark_sd", anim = TRUE, animType = "fade")
     )
   }
-  
+
   # Disable the "save" button if the plot name input is empty
   observe({
     shinyjs::toggleState("save_plot_btn_sd",
+                         condition = nzchar(trimws(input$save_plot_name)))
+  })
+  
+  ### Detail
+  save_plot_detail <- function() {
+    shinyjs::show("save_plot_checkmark_detail")
+    values$plots[[trimws(input$save_plot_name_detail)]] <- Detail()
+    updateTextInput(session, "save_plot_name_detail", value = "")
+    shinyjs::delay(
+      1000,
+      shinyjs::hide("save_plot_checkmark_detail", anim = TRUE, animType = "fade")
+    )
+  }
+  # Disable the "save" button if the plot name input is empty
+  observe({
+    shinyjs::toggleState("save_plot_btn_detail",
                          condition = nzchar(trimws(input$save_plot_name)))
   })
   
